@@ -1,0 +1,51 @@
+# prospect-routine
+
+Plugin Claude Code — pipeline outbound Lemlist multi-verticales : **sourcing → ICP → rédaction → livraison**, piloté par un routeur qui orchestre des workflows réutilisables paramétrés par `campaign_id`.
+
+## Trois foyers, une frontière
+
+| Foyer | Contenu | Où |
+|---|---|---|
+| **Ce repo** | Le moteur générique : routeur, workflows, scripts déterministes, graders | `Code/drivenlabs-ai/prospect-routine/` (git, plugin public AGPL-3.0) |
+| **Drive Drivenlabs** | L'intelligence métier : `icp.md`, prompts, datasets, registre des campagnes | `Drivenlabs Team/…/Prospection/` |
+| **État machine** | Mémoire des runs : déjà-vus, reçus, journal | `~/.claude/prospect-routine/<slug>/` |
+
+Le pont entre les trois : le **`campaign_id`**. SSoT strict — Lemlist porte la structure (séquence + leads + variables), le Drive porte l'intelligence, aucune réplication.
+
+## Composants
+
+- `skills/prospect-routine/` — le **routeur** (déclenchement langage naturel + dispatch d'intention).
+- `scripts/routine.py` — le **moteur** déterministe : seul point d'IO Lemlist + état, modèle de livraison « charger puis lancer ». Zéro LLM.
+- `workflows/*.workflow.js` — les **workflows** : création de campagne (W1), setup Lemlist (W2), sourcing (W3), graders d'éval.
+- `agents/` — sous-agents sourcing / scoring / juge (à venir).
+- `hooks/` — hook `SessionStart` qui synchronise les workflows vers `~/.claude/workflows/`.
+- `docs/` — design, architecture, specs.
+
+## Workflows : pourquoi un hook de sync
+
+« Workflow » n'est pas un composant de plugin reconnu par Claude Code. Les `.workflow.js` doivent vivre dans `~/.claude/workflows/` pour devenir des workflows sauvegardés (`/W1`, `/W2`…). Le repo reste la **source de vérité** ; le hook `SessionStart` (`scripts/sync-workflows.sh`) recopie idempotemment le repo vers cet emplacement à chaque démarrage — install, mise à jour et auto-réparation automatiques.
+
+## Installation
+
+Via la marketplace publique Drivenlabs :
+
+```bash
+/plugin marketplace add Drivenlabs-ai/plugins
+/plugin install prospect-routine@drivenlabs-ai
+```
+
+En développement local :
+
+```bash
+claude --plugin-dir /Users/alexandrebouchez/Code/drivenlabs-ai/prospect-routine
+```
+
+Clé API Lemlist : `~/.claude/linkedin-prospect.local.md` (`lemlist_api_key:`), hors repo.
+
+## Licence
+
+AGPL-3.0-only — libre et ouvert, copyleft : toute redistribution ou usage en service réseau reste sous la même licence. Voir `LICENSE`.
+
+## Statut
+
+En construction, spec par spec (cf. `docs/specs/`). Ordre : moteur (`routine.py`) → W2 → W3 → graders → W1 → routeur.
