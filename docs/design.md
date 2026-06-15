@@ -230,13 +230,13 @@ Routeur mince · workflows réutilisables **paramétrés par `campaign_id`** · 
 
 **Conséquence SSoT** : Lemlist garde la **séquence** (+ noms de variables) + les **leads, leurs variables, la liste** ; le local garde les **prompts** qui génèrent les **valeurs**. Contrat = noms de variables ↔ clés de prompts, contrôlé par `verify` + la garde `Launch Lead`.
 
-**Exclusivité & opt-out (conservés)** : `deduplicate` + check avant ajout via `Get Many Contacts` (appartenance campagne) et **Unsubscribes** (`Get Contact Subscription Status`) → un contact jamais dans 2 campagnes actives + opt-out RGPD honoré.
+**Exclusivité & opt-out — natifs (vérifié doc 2026-06-15)** : `create-lead?deduplicate=true` exclut nativement un email déjà présent dans une **autre campagne** ; l'opt-out est appliqué nativement à l'envoi (suppression `unsubscribes`). On passe donc **toujours `deduplicate=true`** ; pour les leads LinkedIn-only (sans email), nos **reçus** (clé linkedinUrl) couvrent nos campagnes. Pas de pré-check `Get Many Contacts` ni de dedup-set local — redondant avec le natif (cf. spec 01 §0).
 
 **Nuances (vérifié sur le compte)** : `icebreaker/followup/closing` sont des **champs custom créés par nous** (`icebreaker` n'est un défaut qu'au niveau *variable de lead*). L'`Add` lead-variables **auto-crée** ; nom existant (agence-immo) → `Update`.
 
-### 11.2 — Couche coordination cross-campagne — v1 *(angle mort majeur)*
+### 11.2 — Coordination cross-campagne — largement NATIF (révisé 2026-06-15)
 
-Tout est partagé au niveau compte : rate limit **20 req/2s global** par clé, People DB **2000/24h**, quotas d'envoi LinkedIn/email (dépassement → **suspension du profil** → toutes les campagnes LinkedIn tombent). Garde-fous : **registre central** `Prospection/campaigns-registry.json` (unicité slug + lookup O(1)) ; **rate-limiter à jeton partagé** (W3 non concurrents ou budget commun) ; lecture du `limitation` People DB + budget d'envoi avant chaque run ; **circuit-breaker** (max leads/run, max messages/jour tous confondus) ; vue agrégée cross-campagne.
+Vérification doc : la **cadence et la sécurité d'envoi sont gérées nativement par Lemlist** (*Sending limits* par boîte, 24 h glissantes, algorithme d'étalement, auto-pause near quota). Nos actions `load`/`launch` n'envoient rien — `launch` enfile, Lemlist diffuse sous ses propres limites. **Le moteur ne construit donc PAS** de rate-limiter d'envoi, token-bucket, run-lock ni circuit-breaker (sur-ingénierie vs natif). Restent côté nous : (a) respecter le **rate limit API 20 req/2s** (honorer `Retry-After`/429 — runs concurrents = au pire un back-off, pas un risque de suspension) ; (b) **registre central** `campaigns-registry.json` (unicité slug + lookup) ; (c) lire le `limitation` People DB au sourcing (quota natif/24 h).
 
 ### 11.3 — Couche machine d'état & reprise — v1 *(angle mort majeur)*
 
