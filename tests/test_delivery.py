@@ -39,7 +39,8 @@ def rec(monkeypatch):
     calls = []
     resp = {"upsert_contact": (201, {"_id": "ctc_1"}), "add_to_list": (200, {}),
             "create_lead": (200, {"_id": "lea_1"}), "set_variables": (200, {}),
-            "launch_lead": (200, {})}
+            "launch_lead": (200, {}),
+            "get_lead": (200, {"_id": "lea_1", "variables": {"icebreaker": "x", "followup": "x", "closing": "x"}})}
 
     def mk(name):
         def fn(*a, **k):
@@ -102,15 +103,28 @@ def test_load_lead_dedup_skip_when_create_returns_no_id(rec, tmp_path):
     assert out["skipped"] and out["reason"] == "cross_campaign_email"
 
 
+REQUIRED = ["icebreaker", "followup", "closing"]
+
+
 def test_launch_leads_refuses_without_confirm(rec, tmp_path):
     out = delivery.launch_leads("KEY", [{"lead_id": "lea_1", "lead_key": "k1"}], "cam_1",
-                                str(tmp_path), confirm=False)
+                                str(tmp_path), REQUIRED, confirm=False)
     assert out["launched"] == [] and rec["names"]() == []
 
 
-def test_launch_leads_launches_and_writes_receipt(rec, tmp_path):
+def test_launch_leads_launches_when_variables_complete(rec, tmp_path):
     out = delivery.launch_leads("KEY", [{"lead_id": "lea_1", "lead_key": "k1"}], "cam_1",
-                                str(tmp_path), confirm=True)
+                                str(tmp_path), REQUIRED, confirm=True)
     assert out["launched"] == ["lea_1"]
-    assert rec["names"]() == ["launch_lead"]
+    assert "launch_lead" in rec["names"]()
     assert receipts.lookup(str(tmp_path), "cam_1", "k1")["stage"] == "launched"
+
+
+def test_launch_leads_refuses_lead_with_empty_required_variable(rec, tmp_path):
+    rec["resp"]["get_lead"] = (200, {"variables": {"icebreaker": "x", "followup": "", "closing": "x"}})
+    out = delivery.launch_leads("KEY", [{"lead_id": "lea_1", "lead_key": "k1"}], "cam_1",
+                                str(tmp_path), REQUIRED, confirm=True)
+    assert out["launched"] == []
+    assert out["skipped"][0]["reason"] == "variables_incompletes"
+    assert "followup" in out["skipped"][0]["missing"]
+    assert "launch_lead" not in rec["names"]()

@@ -5,7 +5,9 @@
 - resolve_campaign : pont slug ↔ campaign_id via `campaigns-registry.json`.
 """
 import json
+import os
 import re
+import tempfile
 from pathlib import Path
 
 
@@ -46,16 +48,46 @@ def load_config(config_path):
         voice = vf.read_text(encoding="utf-8").strip() if vf.exists() else ""
         if not voice:
             raise SystemExit(f"STOP: voice introuvable ou vide ({vf})")
+    # icpFit est requis. Les prompts de message se découvrent par fichier (PAS via un `sequence`
+    # local — la structure vit dans Lemlist) ; `verify` confronte ces clés aux variables réelles.
     prompts = {}
-    for name in ["icpFit"] + list(cfg.get("sequence", [])):
-        f = pdir / f"{name}.md"
-        body = f.read_text(encoding="utf-8").strip() if f.exists() else ""
+    icp = pdir / "icpFit.md"
+    icp_body = icp.read_text(encoding="utf-8").strip() if icp.exists() else ""
+    if not icp_body:
+        raise SystemExit(f"STOP: prompt 'icpFit' introuvable ou vide ({icp})")
+    prompts["icpFit"] = icp_body
+    for f in sorted(pdir.glob("*.md")):
+        if f.stem == "icpFit":
+            continue
+        body = f.read_text(encoding="utf-8").strip()
         if not body:
-            raise SystemExit(f"STOP: prompt '{name}' introuvable ou vide ({f})")
-        if voice and name != "icpFit":
-            body = voice + "\n\n---\n\n" + body
-        prompts[name] = body
+            continue
+        prompts[f.stem] = (voice + "\n\n---\n\n" + body) if voice else body
     return cfg, prompts
+
+
+def _atomic_json(path, payload):
+    path = Path(path).expanduser()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=1)
+        os.replace(tmp, path)
+    except Exception:
+        os.unlink(tmp)
+        raise
+
+
+def register_campaign(registry_path, campaign_json_path, campaign_data, registry_entry):
+    """Écrit `campaign.json` (linkage) + upsert l'entrée du registre par slug (idempotent). Atomique.
+    Ne stocke QUE des pointeurs (ids + chemins), jamais la structure de campagne (SSoT Lemlist)."""
+    _atomic_json(campaign_json_path, campaign_data)
+    reg = Path(registry_path).expanduser()
+    entries = json.loads(reg.read_text(encoding="utf-8")) if reg.exists() else []
+    slug = registry_entry.get("slug")
+    entries = [e for e in entries if e.get("slug") != slug] + [registry_entry]
+    _atomic_json(reg, entries)
 
 
 def resolve_campaign(registry_path, *, slug=None, campaign_id=None):

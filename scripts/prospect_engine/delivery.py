@@ -126,19 +126,28 @@ def load_lead(key, lead, variables, campaign_id, list_id, state_dir, *, confirm,
     return {"ok": True, "skipped": False, "lead_id": lead_id, "contact_id": contact_id, "stage_reached": "varset"}
 
 
-def launch_leads(key, items, campaign_id, state_dir, *, confirm):
+def launch_leads(key, items, campaign_id, state_dir, required_keys, *, confirm):
     """Lance des leads en review dans la séquence. Jamais automatique : `confirm` obligatoire.
-    `items` = [{lead_id, lead_key}]. Lemlist étale ensuite l'envoi selon ses Sending limits."""
+
+    Garde dure (exigence non négociable) : avant de lancer, RELIT les variables réelles du lead dans
+    Lemlist (par id, sans email) et REFUSE tout lead dont une clé requise (dérivée de la séquence) est
+    vide ou absente. `items` = [{lead_id, lead_key}]. Lemlist étale ensuite l'envoi (Sending limits)."""
     if not confirm:
-        return {"launched": [], "refused": True}
-    launched, errors = [], []
+        return {"launched": [], "skipped": [], "errors": [], "refused": True}
+    launched, skipped, errors = [], [], []
     for it in items:
-        st, res = lemlist.launch_lead(key, it["lead_id"])
-        if _ok(st):
+        st, lead = lemlist.get_lead(key, it["lead_id"])
+        variables = lead.get("variables", {}) if isinstance(lead, dict) else {}
+        missing = [k for k in required_keys if not str(variables.get(k) or "").strip()]
+        if missing:
+            skipped.append({"lead_id": it["lead_id"], "reason": "variables_incompletes", "missing": missing})
+            continue
+        st2, res = lemlist.launch_lead(key, it["lead_id"])
+        if _ok(st2):
             launched.append(it["lead_id"])
             receipts.append_receipt(state_dir, {
                 "campaign_id": campaign_id, "lead_key": it.get("lead_key"),
                 "contact_id": it.get("contact_id"), "lead_id": it["lead_id"], "stage": "launched", "ok": True})
         else:
-            errors.append({"lead_id": it["lead_id"], "status": st, "detail": str(res)[:120]})
-    return {"launched": launched, "errors": errors}
+            errors.append({"lead_id": it["lead_id"], "status": st2, "detail": str(res)[:120]})
+    return {"launched": launched, "skipped": skipped, "errors": errors}

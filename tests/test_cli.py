@@ -52,3 +52,18 @@ def test_cli_commit_state_then_dedup_flags_seen(tmp_path):
     out = json.loads(r2.stdout)
     assert [l["linkedinUrl"] for l in out["allowed"]] == ["https://lk/b"]
     assert out["skipped"][0]["reason"] == "already_seen"
+
+
+def test_cli_register_campaign(tmp_path):
+    reg = tmp_path / "reg.json"
+    reg.write_text("[]")
+    cj = tmp_path / "v" / "campaign.json"
+    data = tmp_path / "data.json"
+    data.write_text(json.dumps({"campaign_id": "cam_1", "slug": "x"}))
+    entry = tmp_path / "entry.json"
+    entry.write_text(json.dumps({"slug": "x", "campaign_id": "cam_1", "status": "active"}))
+    r = run("register-campaign", "--registry", str(reg), "--campaign-json", str(cj),
+            "--data-file", str(data), "--entry-file", str(entry))
+    assert r.returncode == 0, r.stderr
+    assert json.loads(reg.read_text())[0]["slug"] == "x"
+    assert json.loads(cj.read_text())["campaign_id"] == "cam_1"

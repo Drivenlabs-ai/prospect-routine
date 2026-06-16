@@ -101,3 +101,46 @@ def test_launch_lead_uses_review_route(monkeypatch):
     lemlist.launch_lead("KEY", "lea_42")
     assert captured["route"] == "/leads/review/lea_42"
     assert captured["method"] == "POST"
+
+
+def test_duplicate_campaign_route_and_name(monkeypatch):
+    cap = {}
+
+    def fake(method, route, key, body=None, **kw):
+        cap.update(method=method, route=route, body=body)
+        return 200, {"_id": "cam_new", "sequenceId": "seq_1"}
+
+    monkeypatch.setattr(lemlist, "api_call", fake)
+    lemlist.duplicate_campaign("KEY", "cam_tpl", "Agence Immo")
+    assert cap["method"] == "POST"
+    assert cap["route"] == "/campaigns/cam_tpl/duplicate"
+    assert cap["body"] == {"name": "Agence Immo"}
+
+
+def test_create_list_route_and_body(monkeypatch):
+    cap = {}
+
+    def fake(method, route, key, body=None, **kw):
+        cap.update(route=route, body=body)
+        return 200, {"_id": "clt_1"}
+
+    monkeypatch.setattr(lemlist, "api_call", fake)
+    lemlist.create_list("KEY", "Agence Immo")
+    assert cap["route"] == "/contacts/lists"
+    assert cap["body"] == {"name": "Agence Immo"}
+
+
+def test_get_campaign_sequences_route(monkeypatch):
+    cap = {}
+    monkeypatch.setattr(lemlist, "api_call",
+                        lambda m, route, k, body=None, **kw: cap.update(route=route) or (200, {}))
+    lemlist.get_campaign_sequences("KEY", "cam_1")
+    assert cap["route"] == "/campaigns/cam_1/sequences"
+
+
+def test_get_lead_by_id_route(monkeypatch):
+    cap = {}
+    monkeypatch.setattr(lemlist, "api_call",
+                        lambda m, route, k, body=None, **kw: cap.update(route=route) or (200, {"variables": {}}))
+    lemlist.get_lead("KEY", "lea_1")
+    assert cap["route"].startswith("/leads") and "id=lea_1" in cap["route"]

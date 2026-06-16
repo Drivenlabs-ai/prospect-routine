@@ -5,11 +5,17 @@ import json
 import time
 from pathlib import Path
 
-from prospect_engine import config, delivery, dedup, lemlist, receipts, state
+from prospect_engine import config, delivery, dedup, lemlist, receipts, state, verify
+
+DEFAULT_KEY = "~/.claude/linkedin-prospect.local.md"
 
 
 def _emit(obj):
     print(json.dumps(obj, ensure_ascii=False))
+
+
+def _key(a):
+    return config.read_key(getattr(a, "api_key_file", None) or DEFAULT_KEY)
 
 
 # ---------- commandes ----------
@@ -67,7 +73,43 @@ def cmd_launch(a):
     cfg = config.load_cfg_only(a.config)
     key = config.read_key(cfg["api_key_file"])
     items = json.loads(Path(a.input).read_text(encoding="utf-8"))
-    _emit(delivery.launch_leads(key, items, cfg["campaign_id"], cfg["state_dir"], confirm=a.confirm))
+    required = verify.required_variables(key, cfg["campaign_id"])  # clés du contrat (séquence Lemlist)
+    _emit(delivery.launch_leads(key, items, cfg["campaign_id"], cfg["state_dir"], required, confirm=a.confirm))
+
+
+# ---------- setup (spec 02) ----------
+
+def cmd_duplicate_campaign(a):
+    st, res = lemlist.duplicate_campaign(_key(a), a.template_id, a.name)
+    r = res if isinstance(res, dict) else {}
+    _emit({"status": st, "campaign_id": r.get("_id"), "sequence_id": r.get("sequenceId"), "raw": res})
+
+
+def cmd_create_list(a):
+    st, res = lemlist.create_list(_key(a), a.name)
+    _emit({"status": st, "list_id": res.get("_id") if isinstance(res, dict) else None})
+
+
+def cmd_verify(a):
+    if a.config:
+        cfg = config.load_cfg_only(a.config)
+        key = config.read_key(cfg["api_key_file"])
+        cid = cfg["campaign_id"]
+        pdir = Path(cfg.get("prompts_dir", "prompts"))
+        pdir = str(pdir if pdir.is_absolute() else Path(a.config).expanduser().parent / pdir)
+    else:
+        key, cid, pdir = _key(a), a.campaign_id, a.prompts_dir
+    out = verify.verify(key, cid, pdir)
+    _emit(out)
+    if not out["aligned"]:
+        raise SystemExit(1)
+
+
+def cmd_register_campaign(a):
+    data = json.loads(Path(a.data_file).read_text(encoding="utf-8"))
+    entry = json.loads(Path(a.entry_file).read_text(encoding="utf-8"))
+    config.register_campaign(a.registry, a.campaign_json, data, entry)
+    _emit({"registered": entry.get("slug")})
 
 
 def cmd_commit_state(a):
@@ -119,6 +161,10 @@ def build_parser():
     p = sub.add_parser("commit-state"); p.add_argument("--config", required=True); p.add_argument("--date", required=True); p.add_argument("--sourced-file", required=True); p.add_argument("--true", type=int, required=True, dest="true"); p.add_argument("--false", type=int, required=True, dest="false"); p.set_defaults(fn=cmd_commit_state)
     p = sub.add_parser("status"); p.add_argument("--config", required=True); p.add_argument("--get"); p.add_argument("--set"); p.set_defaults(fn=cmd_status)
     p = sub.add_parser("log"); p.add_argument("--config", required=True); p.add_argument("--entry-file", required=True); p.set_defaults(fn=cmd_log)
+    p = sub.add_parser("duplicate-campaign"); p.add_argument("--template-id", required=True, dest="template_id"); p.add_argument("--name", required=True); p.add_argument("--api-key-file", dest="api_key_file"); p.set_defaults(fn=cmd_duplicate_campaign)
+    p = sub.add_parser("create-list"); p.add_argument("--name", required=True); p.add_argument("--api-key-file", dest="api_key_file"); p.set_defaults(fn=cmd_create_list)
+    p = sub.add_parser("verify"); p.add_argument("--config"); p.add_argument("--campaign-id", dest="campaign_id"); p.add_argument("--prompts-dir", dest="prompts_dir"); p.add_argument("--api-key-file", dest="api_key_file"); p.set_defaults(fn=cmd_verify)
+    p = sub.add_parser("register-campaign"); p.add_argument("--registry", required=True); p.add_argument("--campaign-json", required=True, dest="campaign_json"); p.add_argument("--data-file", required=True, dest="data_file"); p.add_argument("--entry-file", required=True, dest="entry_file"); p.set_defaults(fn=cmd_register_campaign)
     return ap
 
 

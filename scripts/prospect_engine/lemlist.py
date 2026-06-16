@@ -94,3 +94,25 @@ def get_campaign(key, campaign_id):
 
 def get_campaign_leads(key, campaign_id):
     return paginate(key, f"/campaigns/{campaign_id}/leads/", {"limit": 100})
+
+
+# ---------- setup (spec 02) ----------
+
+def duplicate_campaign(key, template_id, name):
+    """Duplique une campagne template (séquence + délais + variables copiés ; draft, 0 lead)."""
+    return api_call("POST", f"/campaigns/{template_id}/duplicate", key, {"name": name})
+
+
+def create_list(key, name):
+    """Crée une liste de contacts statique (audience non synchronisée). Renvoie clt_…."""
+    return api_call("POST", "/contacts/lists", key, {"name": name})
+
+
+def get_campaign_sequences(key, campaign_id):
+    """Séquences + steps d'une campagne — chaque step porte `type`, `delay`, `message` ({{variables}})."""
+    return api_call("GET", f"/campaigns/{campaign_id}/sequences", key)
+
+
+def get_lead(key, lead_id):
+    """Lit un lead par id (renvoie ses `variables`) — fonctionne sans email, pour la garde launch."""
+    return api_call("GET", f"/leads?id={lead_id}", key)

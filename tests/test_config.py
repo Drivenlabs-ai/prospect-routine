@@ -73,13 +73,44 @@ def test_load_cfg_only_reads_json_without_prompts(tmp_path):
     assert cfg["campaign_id"] == "cam_9"
 
 
-def test_load_config_missing_prompt_raises(tmp_path):
-    cfg_path = _campaign(tmp_path, seq=("icebreaker",))
-    # demande une étape dont le prompt n'existe pas
-    import json as _j
-    p = tmp_path / "campaign.json"
-    data = _j.loads(p.read_text())
-    data["sequence"] = ["icebreaker", "followup"]
-    p.write_text(_j.dumps(data))
+def test_load_config_loads_message_prompts_without_sequence_field(tmp_path):
+    # campaign.json SANS `sequence` (la structure vit dans Lemlist) : les prompts de message
+    # se chargent quand même, par découverte des fichiers du dossier.
+    cfg_path = tmp_path / "campaign.json"
+    cfg_path.write_text(json.dumps({"campaign_id": "cam_1", "prompts_dir": "prompts",
+                                    "state_dir": str(tmp_path)}))
+    pdir = tmp_path / "prompts"
+    pdir.mkdir()
+    (pdir / "icpFit.md").write_text("scoring")
+    (pdir / "closing.md").write_text("le closing")
+    cfg, prompts = config.load_config(str(cfg_path))
+    assert "icpFit" in prompts and "closing" in prompts
+
+
+def test_load_config_missing_icpFit_raises(tmp_path):
+    cfg_path = tmp_path / "campaign.json"
+    cfg_path.write_text(json.dumps({"campaign_id": "cam_1", "prompts_dir": "prompts",
+                                    "state_dir": str(tmp_path)}))
+    (tmp_path / "prompts").mkdir()  # pas d'icpFit.md
     with pytest.raises(SystemExit):
-        config.load_config(cfg_path)
+        config.load_config(str(cfg_path))
+
+
+def test_register_campaign_writes_json_and_appends_registry(tmp_path):
+    reg = tmp_path / "reg.json"
+    reg.write_text("[]")
+    cj = tmp_path / "v" / "campaign.json"
+    config.register_campaign(str(reg), str(cj), {"campaign_id": "cam_1", "slug": "agence-immo"},
+                             {"slug": "agence-immo", "campaign_id": "cam_1", "status": "active"})
+    assert json.loads(cj.read_text())["campaign_id"] == "cam_1"
+    assert json.loads(reg.read_text())[0]["slug"] == "agence-immo"
+
+
+def test_register_campaign_idempotent_updates_existing_slug(tmp_path):
+    reg = tmp_path / "reg.json"
+    reg.write_text(json.dumps([{"slug": "agence-immo", "campaign_id": "old", "status": "paused"}]))
+    cj = tmp_path / "campaign.json"
+    config.register_campaign(str(reg), str(cj), {"campaign_id": "cam_2"},
+                             {"slug": "agence-immo", "campaign_id": "cam_2", "status": "active"})
+    entries = json.loads(reg.read_text())
+    assert len(entries) == 1 and entries[0]["campaign_id"] == "cam_2" and entries[0]["status"] == "active"
