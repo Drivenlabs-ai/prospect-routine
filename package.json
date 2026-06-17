@@ -1,0 +1,8 @@
+{
+  "name": "prospect-routine",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test:js": "node --test tests/js/"
+  }
+}
