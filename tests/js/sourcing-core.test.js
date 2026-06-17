@@ -43,3 +43,48 @@ test("leadId/leadLabel fall back through identifiers", () => {
   assert.equal(core.leadId({ people_db_id: "p1" }), "p1");
   assert.equal(core.leadLabel({ linkedinUrl: "https://lk/x" }), "https://lk/x");
 });
+
+// ---------------------------------------------------------------------------
+// write prompt + messages schema + enrich
+// ---------------------------------------------------------------------------
+
+test("messagesSchema mirrors sequence_keys exactly", () => {
+  const s = core.messagesSchema(["icebreaker", "closing"]);
+  assert.deepEqual(Object.keys(s.properties.messages.properties), ["icebreaker", "closing"]);
+  assert.deepEqual(s.properties.messages.required, ["icebreaker", "closing"]);
+  assert.equal(s.properties.messages.additionalProperties, false);
+});
+
+test("buildWritePrompt embeds each step prompt, keys, context and feedback", () => {
+  const out = core.buildWritePrompt({
+    messagesPrompts: { icebreaker: "ACCROCHE-PROMPT", followup: "RELANCE-PROMPT" },
+    sequenceKeys: ["icebreaker", "followup"],
+    lead: { fullName: "Marie Roy", jobTitle: "Gérante" },
+    context: { summary: "Cliente de X depuis 2020", signals: ["a recruté"] },
+    feedback: { notes: "angle trop générique", angle_coherent: false },
+  });
+  assert.match(out, /ACCROCHE-PROMPT/);
+  assert.match(out, /RELANCE-PROMPT/);
+  assert.match(out, /icebreaker/);
+  assert.match(out, /Cliente de X depuis 2020/);
+  assert.match(out, /angle trop générique/);
+  assert.match(out, /Marie Roy/);
+});
+
+test("buildWritePrompt omits context and feedback sections when absent", () => {
+  const out = core.buildWritePrompt({
+    messagesPrompts: { icebreaker: "P" }, sequenceKeys: ["icebreaker"], lead: { fullName: "A" },
+  });
+  assert.doesNotMatch(out, /Contexte enrichi/);
+  assert.doesNotMatch(out, /Correction demandée/);
+});
+
+test("ENRICH_SCHEMA requires summary", () => {
+  assert.deepEqual(core.ENRICH_SCHEMA.required, ["summary"]);
+});
+
+test("buildEnrichPrompt carries the directive and the prospect", () => {
+  const out = core.buildEnrichPrompt("Vérifie si cliente de X", { fullName: "Marie Roy" });
+  assert.match(out, /Vérifie si cliente de X/);
+  assert.match(out, /Marie Roy/);
+});
