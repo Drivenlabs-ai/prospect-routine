@@ -151,3 +151,113 @@ test("buildApproved shapes {lead, variables} and persists context to the store v
     { lead: { linkedinUrl: "https://lk/a" }, variables: { icebreaker: "x", closing: "y", contexte: "cliente de X" } });
   assert.deepEqual(core.buildApproved({ lead: {}, messages: { icebreaker: "x" } }, null).variables, { icebreaker: "x" });
 });
+
+// ---------------------------------------------------------------------------
+// runSourcing — orchestration validated by a mocked run (no real LLM)
+// ---------------------------------------------------------------------------
+
+// Faithful runtime mocks, mirroring the Workflow tool contract.
+async function fakePipeline(items, ...stages) {
+  return Promise.all(items.map(async (item, i) => {
+    let v = item;
+    for (const s of stages) { v = await s(v, item, i); if (v == null) return null; }
+    return v;
+  }));
+}
+async function fakeParallel(thunks) {
+  return Promise.all(thunks.map(async (t) => { try { return await t(); } catch { return null; } }));
+}
+function makeEnv(args, agentImpl, spy) {
+  return {
+    args, pipeline: fakePipeline, parallel: fakeParallel, phase: () => {}, log: () => {},
+    agent: async (prompt, opts) => { if (spy) spy.push({ phase: opts.phase, prompt }); return agentImpl(prompt, opts); },
+  };
+}
+const baseArgs = {
+  candidats: [
+    { linkedinUrl: "https://lk/a", fullName: "A Qual", jobTitle: "Gérant" },
+    { linkedinUrl: "https://lk/b", fullName: "B NoQual", jobTitle: "Stagiaire" },
+  ],
+  prompts: { icpFit: "score {{jobTitle}}", messages: { icebreaker: "P-ice", closing: "P-clo" } },
+  sequence_keys: ["icebreaker", "closing"],
+};
+
+test("runSourcing qualifies, writes, approves; drops non-qualified", async () => {
+  const spy = [];
+  const agentImpl = (prompt, opts) => {
+    if (opts.phase === "score") return { qualifie: /Gérant/.test(prompt), raison: "x" };
+    if (opts.phase === "write") return { messages: { icebreaker: "Bonjour", closing: "Au plaisir" } };
+    if (opts.phase === "review") return { verdicts: [{ id: "https://lk/a", pass: true }] };
+    throw new Error("unexpected phase " + opts.phase);
+  };
+  const out = await core.runSourcing(makeEnv(baseArgs, agentImpl, spy));
+  assert.equal(out.approuves.length, 1);
+  assert.equal(out.approuves[0].lead.linkedinUrl, "https://lk/a");
+  assert.deepEqual(Object.keys(out.approuves[0].variables), ["icebreaker", "closing"]);
+  assert.ok(!spy.some((c) => c.phase === "enrich"));
+});
+
+test("runSourcing pins models per spec (score=haiku, write=sonnet, review=sonnet)", async () => {
+  const seen = {};
+  const agentImpl = (prompt, opts) => {
+    seen[opts.phase] = opts.model;
+    if (opts.phase === "score") return { qualifie: true, raison: "x" };
+    if (opts.phase === "write") return { messages: { icebreaker: "i", closing: "c" } };
+    if (opts.phase === "review") return { verdicts: [{ id: "https://lk/a", pass: true }, { id: "https://lk/b", pass: true }] };
+    throw new Error("unexpected " + opts.phase);
+  };
+  await core.runSourcing(makeEnv(baseArgs, agentImpl));
+  assert.equal(seen.score, "haiku");
+  assert.equal(seen.write, "sonnet");
+  assert.equal(seen.review, "sonnet");
+});
+
+test("runSourcing regenerates a rejected draft once, then approves it", async () => {
+  let reviewCalls = 0;
+  const agentImpl = (prompt, opts) => {
+    if (opts.phase === "score") return { qualifie: true, raison: "x" };
+    if (opts.phase === "write") return { messages: { icebreaker: "v", closing: "w" } };
+    if (opts.phase === "review") {
+      reviewCalls += 1;
+      return { verdicts: [{ id: "https://lk/a", pass: reviewCalls > 1 }, { id: "https://lk/b", pass: reviewCalls > 1 }] };
+    }
+    throw new Error("unexpected " + opts.phase);
+  };
+  const args = { ...baseArgs, candidats: [baseArgs.candidats[0], { linkedinUrl: "https://lk/b", fullName: "B", jobTitle: "Gérant" }] };
+  const out = await core.runSourcing(makeEnv(args, agentImpl));
+  assert.equal(out.approuves.length, 2);
+  assert.equal(reviewCalls, 2);
+});
+
+test("runSourcing discards a draft still failing after the single regeneration", async () => {
+  const agentImpl = (prompt, opts) => {
+    if (opts.phase === "score") return { qualifie: /Gérant/.test(prompt), raison: "x" };
+    if (opts.phase === "write") return { messages: { icebreaker: "v", closing: "w" } };
+    if (opts.phase === "review") return { verdicts: [{ id: "https://lk/a", pass: false, notes: "nope" }] };
+    throw new Error("unexpected " + opts.phase);
+  };
+  const out = await core.runSourcing(makeEnv(baseArgs, agentImpl));
+  assert.deepEqual(out.approuves, []);
+});
+
+test("runSourcing runs enrich only when enabled and only for qualified, persisting context", async () => {
+  const spy = [];
+  const agentImpl = (prompt, opts) => {
+    if (opts.phase === "score") return { qualifie: /Gérant/.test(prompt), raison: "x" };
+    if (opts.phase === "enrich") return { summary: "cliente de X", signals: ["a recruté"] };
+    if (opts.phase === "write") return { messages: { icebreaker: "i", closing: "c" } };
+    if (opts.phase === "review") return { verdicts: [{ id: "https://lk/a", pass: true }] };
+    throw new Error("unexpected " + opts.phase);
+  };
+  const args = { ...baseArgs, enrich: { enabled: true, directive: "vérifie X", store: "variable:contexte" } };
+  const out = await core.runSourcing(makeEnv(args, agentImpl, spy));
+  assert.equal(spy.filter((c) => c.phase === "enrich").length, 1);
+  assert.equal(out.approuves[0].variables.contexte, "cliente de X");
+});
+
+test("runSourcing returns no approvals on an empty candidate list without calling agents", async () => {
+  const spy = [];
+  const out = await core.runSourcing(makeEnv({ ...baseArgs, candidats: [] }, () => { throw new Error("no agent"); }, spy));
+  assert.deepEqual(out.approuves, []);
+  assert.equal(spy.length, 0);
+});

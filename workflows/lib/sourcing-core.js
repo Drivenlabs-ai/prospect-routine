@@ -186,9 +186,87 @@ function buildApproved(draft, storeKey) {
   return { lead: draft.lead, variables };
 }
 
+// ---- orchestration (the workflow body; env carries the injected runtime globals) ----
+
+async function batchReview(env, drafts, { sequenceKeys, maxWords, judgeModel, reviewBatchSize }) {
+  const RS = reviewSchema();
+  const batches = chunk(drafts, reviewBatchSize);
+  const lists = await env.parallel(batches.map((b) => async () =>
+    env.agent(buildReviewPrompt({ batch: b, sequenceKeys, maxWords }),
+      { schema: RS, model: judgeModel, phase: "review", label: `review:${b.length}` })));
+  const verdicts = [];
+  for (const l of lists) if (l && Array.isArray(l.verdicts)) verdicts.push(...l.verdicts);
+  return verdicts;
+}
+
+async function runSourcing(env) {
+  const { agent, pipeline, args } = env;
+  const candidats = (args && args.candidats) || [];
+  const prompts = (args && args.prompts) || {};
+  const sequenceKeys = (args && args.sequence_keys) || [];
+  const enrich = (args && args.enrich) || { enabled: false };
+  const models = (args && args.models) || {};
+  const scoreModel = models.scoring || "haiku";
+  const writeModel = models.writing || "sonnet";
+  const judgeModel = models.judge || "sonnet";
+  const reviewBatchSize = (args && args.review_batch_size) || 8;
+  const maxWords = (args && args.review && args.review.max_words) || 75;
+  const storeKey = parseStoreKey(enrich.store);
+  const MSG_SCHEMA = messagesSchema(sequenceKeys);
+  const reviewOpts = { sequenceKeys, maxWords, judgeModel, reviewBatchSize };
+
+  if (!candidats.length) return { approuves: [] };
+
+  // score → (enrich) → write, as one barrier-free pipeline.
+  const written = await pipeline(
+    candidats,
+    (lead) => agent(buildScorePrompt(prompts.icpFit, lead),
+      { schema: VERDICT_SCHEMA, model: scoreModel, phase: "score", label: `score:${leadLabel(lead)}` }),
+    async (verdict, lead) => {
+      if (!verdict || !verdict.qualifie) return null;
+      let context = null;
+      if (enrich.enabled) {
+        context = await agent(buildEnrichPrompt(enrich.directive, lead),
+          { schema: ENRICH_SCHEMA, model: enrich.model || judgeModel, phase: "enrich", label: `enrich:${leadLabel(lead)}` });
+      }
+      return { id: leadId(lead), lead, context };
+    },
+    async (acc, lead) => {
+      if (!acc) return null;
+      const out = await agent(buildWritePrompt({ messagesPrompts: prompts.messages, sequenceKeys, lead, context: acc.context }),
+        { schema: MSG_SCHEMA, model: writeModel, phase: "write", label: `write:${leadLabel(lead)}` });
+      return { ...acc, messages: out && out.messages };
+    },
+  );
+
+  const drafts = filterDrafts(written);
+  if (!drafts.length) return { approuves: [] };
+
+  const verdicts = await batchReview(env, drafts, reviewOpts);
+  const { approuves, aRejeter } = splitVerdicts(drafts, verdicts);
+
+  // One regeneration of the rejects, then a single re-review.
+  let regenPass = [];
+  if (aRejeter.length) {
+    const regen = await env.parallel(aRejeter.map((d) => async () => {
+      const out = await agent(buildWritePrompt({ messagesPrompts: prompts.messages, sequenceKeys, lead: d.lead, context: d.context, feedback: d.verdict }),
+        { schema: MSG_SCHEMA, model: writeModel, phase: "write", label: `rewrite:${d.id}` });
+      return out && out.messages ? { id: d.id, lead: d.lead, context: d.context, messages: out.messages } : null;
+    }));
+    const regenDrafts = filterDrafts(regen);
+    if (regenDrafts.length) {
+      const regenVerdicts = await batchReview(env, regenDrafts, reviewOpts);
+      regenPass = splitVerdicts(regenDrafts, regenVerdicts).approuves;
+    }
+  }
+
+  return { approuves: [...approuves, ...regenPass].map((d) => buildApproved(d, storeKey)) };
+}
+
 module.exports = {
   interpolate, VERDICT_SCHEMA, leadId, leadLabel, buildScorePrompt,
   ENRICH_SCHEMA, buildEnrichPrompt, messagesSchema, buildWritePrompt,
   reviewSchema, buildReviewPrompt,
   filterDrafts, splitVerdicts, chunk, parseStoreKey, buildApproved,
+  batchReview, runSourcing,
 };
