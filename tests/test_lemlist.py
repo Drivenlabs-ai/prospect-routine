@@ -144,3 +144,16 @@ def test_get_lead_by_id_route(monkeypatch):
                         lambda m, route, k, body=None, **kw: cap.update(route=route) or (200, {"variables": {}}))
     lemlist.get_lead("KEY", "lea_1")
     assert cap["route"].startswith("/leads") and "id=lea_1" in cap["route"]
+
+
+def test_search_people_route_and_body(monkeypatch):
+    cap = {}
+
+    def fake(method, route, key, body=None, **kw):
+        cap.update(method=method, route=route, body=body)
+        return 200, {"results": [], "limitation": 1999}
+
+    monkeypatch.setattr(lemlist, "api_call", fake)
+    lemlist.search_people("KEY", [{"filterId": "f1", "in": ["x"]}], page=1, size=25)
+    assert cap["method"] == "POST" and cap["route"] == "/database/people"
+    assert cap["body"] == {"filters": [{"filterId": "f1", "in": ["x"]}], "page": 1, "size": 25}

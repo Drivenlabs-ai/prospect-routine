@@ -50,7 +50,7 @@ Ce qui **reste au moteur** :
 | `dedup-check` | Pré-filtre local (reçus) avant chargement | `--input`, `--config` | `{allowed[], skipped[{lead, reason}]}` |
 | `load-lead` | **Chargement composite (modèle C, étapes 1→4)** | `--input` (1 lead + variables), `--config`, `[--confirm]` | `{ok, lead_id, stage_reached, skipped, receipt}` |
 | `launch` | **Lancement (étape 5)**, par lead ou par lot, gardé | `--input` (lead_ids), `--config`, `--confirm` | `{launched[], errors[]}` |
-| `commit-state` | Déjà-vus + historique du run | `--sourced-file`, `--true`, `--false`, `--date` | total seen |
+| `record-run` | Déjà-vus + historique du run | `--sourced-file`, `--true`, `--false`, `--date` | total seen |
 | `status` | Lit/écrit la machine d'état (reprise workflows) | `--get` / `--set k=v` | `status.json` courant |
 | `log` | Ajoute une entrée au journal | `--entry-file` | confirmation |
 
@@ -107,7 +107,7 @@ Lit les **reçus** de la verticale et écarte les leads déjà chargés pour cet
 
 | Fichier | Contenu | Écrit par |
 |---|---|---|
-| `state.json` | `seen_lead_ids` (fenêtre glissante bornée), `history`, `last_run` | `commit-state` |
+| `state.json` | `seen_lead_ids` (fenêtre glissante bornée), `history`, `last_run` | `record-run` |
 | `status.json` | phases (`phase1_done`, `w2_steps[]`, `edit_in_progress`, `last_run`) | `status` |
 | `receipts.jsonl` | ledger : `{ts, campaign_id, lead_key, contact_id, lead_id, stage, ok}` | `load-lead`, `launch` |
 
@@ -155,7 +155,7 @@ Fonctions pures + transitions, `api_call` mocké :
 - `load-lead` : idempotence (reçu → skip), reprise à mi-chaîne, dry-run (zéro réseau), filet message, gestion 429/`Retry-After`, `deduplicate` skip.
 - `launch` : refus sans `--confirm`, mise à jour reçu, lot.
 - `dedup-check` : `already_loaded` / `already_seen` (pur local).
-- `commit-state` : fenêtre glissante, atomicité.
+- `record-run` : fenêtre glissante, atomicité.
 - `resolve` : slug connu / inconnu / via campaign_id inverse.
 - `status` : get/set, reprise.
 

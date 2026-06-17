@@ -21,7 +21,7 @@ def read_key(path):
 
 def load_cfg_only(config_path):
     """Charge uniquement `campaign.json` (sans les prompts). Pour les commandes qui n'en ont pas
-    besoin (resolve, status, dedup-check, commit-state, log, fetch, load-lead, launch)."""
+    besoin (resolve, status, dedup-check, record-run, log, fetch, load-lead, launch)."""
     p = Path(config_path).expanduser()
     try:
         return json.loads(p.read_text(encoding="utf-8"))

@@ -5,7 +5,7 @@ import json
 import time
 from pathlib import Path
 
-from prospect_engine import config, delivery, dedup, lemlist, receipts, state, verify
+from prospect_engine import config, delivery, dedup, lemlist, receipts, sourcing, state, verify
 
 DEFAULT_KEY = "~/.claude/linkedin-prospect.local.md"
 
@@ -77,6 +77,14 @@ def cmd_launch(a):
     _emit(delivery.launch_leads(key, items, cfg["campaign_id"], cfg["state_dir"], required, confirm=a.confirm))
 
 
+def cmd_source(a):
+    cfg = config.load_cfg_only(a.config)
+    key = config.read_key(cfg["api_key_file"])
+    seen = set(state.load_state(cfg["state_dir"])["seen_lead_ids"])
+    target = a.target if a.target is not None else cfg.get("daily_target", 20)
+    _emit(sourcing.source(key, cfg.get("filters", []), seen, target))
+
+
 # ---------- setup (spec 02) ----------
 
 def cmd_duplicate_campaign(a):
@@ -112,7 +120,7 @@ def cmd_register_campaign(a):
     _emit({"registered": entry.get("slug")})
 
 
-def cmd_commit_state(a):
+def cmd_record_run(a):
     cfg = config.load_cfg_only(a.config)
     sourced = json.loads(Path(a.sourced_file).read_text(encoding="utf-8"))
     st = state.apply_commit(state.load_state(cfg["state_dir"]), a.date, sourced, a.true, a.false,
@@ -156,9 +164,10 @@ def build_parser():
     p = sub.add_parser("resolve"); p.add_argument("--registry", required=True); p.add_argument("--slug"); p.add_argument("--campaign-id", dest="campaign_id"); p.set_defaults(fn=cmd_resolve)
     p = sub.add_parser("fetch"); p.add_argument("--config", required=True); p.set_defaults(fn=cmd_fetch)
     p = sub.add_parser("dedup-check"); p.add_argument("--config", required=True); p.add_argument("--input", required=True); p.set_defaults(fn=cmd_dedup_check)
+    p = sub.add_parser("source"); p.add_argument("--config", required=True); p.add_argument("--target", type=int, default=None); p.set_defaults(fn=cmd_source)
     p = sub.add_parser("load-lead"); p.add_argument("--config", required=True); p.add_argument("--input", required=True); p.add_argument("--confirm", action="store_true"); p.set_defaults(fn=cmd_load_lead)
     p = sub.add_parser("launch"); p.add_argument("--config", required=True); p.add_argument("--input", required=True); p.add_argument("--confirm", action="store_true"); p.set_defaults(fn=cmd_launch)
-    p = sub.add_parser("commit-state"); p.add_argument("--config", required=True); p.add_argument("--date", required=True); p.add_argument("--sourced-file", required=True); p.add_argument("--true", type=int, required=True, dest="true"); p.add_argument("--false", type=int, required=True, dest="false"); p.set_defaults(fn=cmd_commit_state)
+    p = sub.add_parser("record-run"); p.add_argument("--config", required=True); p.add_argument("--date", required=True); p.add_argument("--sourced-file", required=True); p.add_argument("--true", type=int, required=True, dest="true"); p.add_argument("--false", type=int, required=True, dest="false"); p.set_defaults(fn=cmd_record_run)
     p = sub.add_parser("status"); p.add_argument("--config", required=True); p.add_argument("--get"); p.add_argument("--set"); p.set_defaults(fn=cmd_status)
     p = sub.add_parser("log"); p.add_argument("--config", required=True); p.add_argument("--entry-file", required=True); p.set_defaults(fn=cmd_log)
     p = sub.add_parser("duplicate-campaign"); p.add_argument("--template-id", required=True, dest="template_id"); p.add_argument("--name", required=True); p.add_argument("--api-key-file", dest="api_key_file"); p.set_defaults(fn=cmd_duplicate_campaign)

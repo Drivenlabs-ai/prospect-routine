@@ -1,5 +1,5 @@
 """Intégration CLI : l'entrée stable `python3 scripts/routine.py <cmd>` dispatche correctement.
-Couvre les commandes sans réseau (resolve, status, dedup-check, commit-state)."""
+Couvre les commandes sans réseau (resolve, status, dedup-check, record-run)."""
 import json
 import subprocess
 import sys
@@ -36,11 +36,11 @@ def test_cli_status_set_then_get(tmp_path):
     assert json.loads(r.stdout) == {"phase1_done": True}
 
 
-def test_cli_commit_state_then_dedup_flags_seen(tmp_path):
+def test_cli_record_run_then_dedup_flags_seen(tmp_path):
     cfg = _campaign(tmp_path)
     sourced = tmp_path / "sourced.json"
     sourced.write_text(json.dumps(["https://lk/a"]))
-    r1 = run("commit-state", "--config", cfg, "--date", "2026-06-15",
+    r1 = run("record-run", "--config", cfg, "--date", "2026-06-15",
              "--sourced-file", str(sourced), "--true", "1", "--false", "0")
     assert r1.returncode == 0, r1.stderr
 
@@ -52,6 +52,30 @@ def test_cli_commit_state_then_dedup_flags_seen(tmp_path):
     out = json.loads(r2.stdout)
     assert [l["linkedinUrl"] for l in out["allowed"]] == ["https://lk/b"]
     assert out["skipped"][0]["reason"] == "already_seen"
+
+
+def test_cmd_source_wires_filters_and_seen(monkeypatch, tmp_path, capsys):
+    from prospect_engine import cli, config, sourcing, state
+    cfg = {"filters": [{"filterId": "f1", "in": ["x"]}], "api_key_file": "x", "state_dir": str(tmp_path)}
+    monkeypatch.setattr(config, "load_cfg_only", lambda p: cfg)
+    monkeypatch.setattr(config, "read_key", lambda p: "KEY")
+    monkeypatch.setattr(state, "load_state", lambda d: {"seen_lead_ids": ["https://lk/seen"]})
+    cap = {}
+
+    def fake_source(key, filters, seen, target, **kw):
+        cap.update(filters=filters, seen=seen, target=target)
+        return {"candidats": [], "limitation": 9, "pages_used": 1, "exhausted": True}
+
+    monkeypatch.setattr(sourcing, "source", fake_source)
+
+    class A:
+        config = "x"
+        target = 5
+    cli.cmd_source(A())
+    out = json.loads(capsys.readouterr().out)
+    assert cap["filters"] == [{"filterId": "f1", "in": ["x"]}] and cap["target"] == 5
+    assert "https://lk/seen" in cap["seen"]
+    assert out["limitation"] == 9
 
 
 def test_cli_register_campaign(tmp_path):

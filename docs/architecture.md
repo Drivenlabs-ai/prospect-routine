@@ -104,7 +104,7 @@ Drivenlabs Team/Drivenlabs/Prospection/             # intelligence métier (SoT,
 - *+étape* → mutation séquence Lemlist + nouvelle variable + `verify` ;
 - *timing* → mutation des délais.
 
-**Run (sourcing)** : Router → `resolve` → **W3** [`verify` pré-run → sourcing → scoring `icpFit` (Haiku) → rédaction par étape] → **par lead** : `dedup-check` (exclusivité + opt-out) → `upsert-contact` → `add-to-list` → `create-lead` (`deduplicate`) → `set-variables` → `launch` → `receipt` + `commit-state`.
+**Run (sourcing)** : Router → `resolve` → **W3** [`verify` pré-run → sourcing → scoring `icpFit` (Haiku) → rédaction par étape] → **par lead** : `dedup-check` (exclusivité + opt-out) → `upsert-contact` → `add-to-list` → `create-lead` (`deduplicate`) → `set-variables` → `launch` → `receipt` + `record-run`.
 
 ---
 

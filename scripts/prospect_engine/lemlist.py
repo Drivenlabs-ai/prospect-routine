@@ -116,3 +116,8 @@ def get_campaign_sequences(key, campaign_id):
 def get_lead(key, lead_id):
     """Lit un lead par id (renvoie ses `variables`) — fonctionne sans email, pour la garde launch."""
     return api_call("GET", f"/leads?id={lead_id}", key)
+
+
+def search_people(key, filters, page=1, size=100):
+    """Recherche dans la People DB. Réponse : results[] + total + `limitation` (quota restant/24 h)."""
+    return api_call("POST", "/database/people", key, {"filters": filters, "page": page, "size": size})
