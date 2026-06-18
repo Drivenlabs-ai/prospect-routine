@@ -21,3 +21,11 @@ test("generated workflow is self-contained: no require/import, declares meta, ca
   // the CommonJS "use strict" directive must be dropped (it would be a no-op mid-body once wrapped).
   assert.doesNotMatch(src, /"use strict"/);
 });
+
+test("META.phases stays in sync with the core's phase: strings (generator throws otherwise)", () => {
+  // buildWorkflowSource() throws on divergence; this asserts it doesn't and covers all four phases.
+  assert.doesNotThrow(buildWorkflowSource);
+  for (const p of ["score", "enrich", "write", "review"]) {
+    assert.match(buildWorkflowSource(), new RegExp(`"title": "${p}"`));
+  }
+});

@@ -93,8 +93,8 @@ test("buildEnrichPrompt carries the directive and the prospect", () => {
 // review (GATE 2 boolean rubric, by batch)
 // ---------------------------------------------------------------------------
 
-test("reviewSchema declares the boolean rubric per verdict", () => {
-  const item = core.reviewSchema().properties.verdicts.items;
+test("REVIEW_SCHEMA declares the boolean rubric per verdict", () => {
+  const item = core.REVIEW_SCHEMA.properties.verdicts.items;
   for (const k of ["id", "no_fabrication", "angle_coherent", "within_length", "no_banned_phrases", "vouvoiement", "pass"]) {
     assert.ok(item.required.includes(k), `missing ${k}`);
   }

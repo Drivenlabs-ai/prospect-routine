@@ -19,6 +19,15 @@ const META = {
 
 function buildWorkflowSource() {
   const core = fs.readFileSync(path.join(__dirname, "sourcing-core.js"), "utf8");
+
+  // META.phases is the workflow's public progress contract; the ground truth is the
+  // core's phase: strings. Fail generation (and the sync test) if they ever diverge.
+  const corePhases = [...new Set([...core.matchAll(/phase:\s*"(\w+)"/g)].map((m) => m[1]))].sort();
+  const metaTitles = META.phases.map((p) => p.title).sort();
+  if (JSON.stringify(corePhases) !== JSON.stringify(metaTitles)) {
+    throw new Error(`META.phases ${JSON.stringify(metaTitles)} out of sync with core phases ${JSON.stringify(corePhases)}`);
+  }
+
   const body = core
     .replace(/^"use strict";\n/, "")            // no-op once wrapped; strip so it doesn't land mid-body
     .replace(/\nmodule\.exports[\s\S]*$/, "\n")  // drop the CommonJS export tail

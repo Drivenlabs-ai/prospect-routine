@@ -98,31 +98,29 @@ function buildWritePrompt({ messagesPrompts, sequenceKeys, lead, context, feedba
 
 // ---- review (GATE 2: boolean rubric, judged by batch) ----
 
-function reviewSchema() {
-  return {
-    type: "object", additionalProperties: false,
-    properties: {
-      verdicts: {
-        type: "array",
-        items: {
-          type: "object", additionalProperties: false,
-          properties: {
-            id: { type: "string" },
-            no_fabrication: { type: "boolean", description: "Aucun fait/chiffre/résultat inventé." },
-            angle_coherent: { type: "boolean", description: "L'angle tient sur tout le fil, ancré sur le prospect." },
-            within_length: { type: "boolean", description: "Chaque message ≤ longueur cible." },
-            no_banned_phrases: { type: "boolean", description: "Aucune formule cliché / jargon / ouverture interdite." },
-            vouvoiement: { type: "boolean", description: "Français, vouvoiement constant." },
-            pass: { type: "boolean", description: "Vrai UNIQUEMENT si tous les critères ci-dessus sont vrais." },
-            notes: { type: "string", description: "Si échec : ce qui cloche, en une phrase." },
-          },
-          required: ["id", "no_fabrication", "angle_coherent", "within_length", "no_banned_phrases", "vouvoiement", "pass"],
+const REVIEW_SCHEMA = {
+  type: "object", additionalProperties: false,
+  properties: {
+    verdicts: {
+      type: "array",
+      items: {
+        type: "object", additionalProperties: false,
+        properties: {
+          id: { type: "string" },
+          no_fabrication: { type: "boolean", description: "Aucun fait/chiffre/résultat inventé." },
+          angle_coherent: { type: "boolean", description: "L'angle tient sur tout le fil, ancré sur le prospect." },
+          within_length: { type: "boolean", description: "Chaque message ≤ longueur cible." },
+          no_banned_phrases: { type: "boolean", description: "Aucune formule cliché / jargon / ouverture interdite." },
+          vouvoiement: { type: "boolean", description: "Français, vouvoiement constant." },
+          pass: { type: "boolean", description: "Vrai UNIQUEMENT si tous les critères ci-dessus sont vrais." },
+          notes: { type: "string", description: "Si échec : ce qui cloche, en une phrase." },
         },
+        required: ["id", "no_fabrication", "angle_coherent", "within_length", "no_banned_phrases", "vouvoiement", "pass"],
       },
     },
-    required: ["verdicts"],
-  };
-}
+  },
+  required: ["verdicts"],
+};
 
 const REVIEW_RUBRIC = [
   "Évalue chaque lead sur 5 critères booléens (la garde déterministe is_clean_message couvre déjà markdown/tirets — juge le fond) :",
@@ -174,12 +172,14 @@ function parseStoreKey(store) {
   return m ? m[1].trim() : null;
 }
 
-// Keep the out-of-contract `contexte` loadable: neutralize what the engine's
-// is_clean_message net rejects (em/en dashes, > 150 words) so an enrich note is
-// never the reason a fully-processed lead is silently skipped at load.
+// Mirrors the two rules of the engine's delivery.is_clean_message that free prose
+// can realistically trip: em/en dashes and the word cap. Keep these in sync with
+// scripts/prospect_engine/delivery.py if that net changes.
+const VARIABLE_MAX_WORDS = 150;
+
 function sanitizeForVariable(text) {
   const words = String(text == null ? "" : text).replace(/[—–]/g, "-").trim().split(/\s+/).filter(Boolean);
-  return words.slice(0, 150).join(" ");
+  return words.slice(0, VARIABLE_MAX_WORDS).join(" ");
 }
 
 function contextValue(context) {
@@ -187,6 +187,10 @@ function contextValue(context) {
   return sanitizeForVariable(typeof context === "string" ? context : context.summary) || null;
 }
 
+// Policy: message variables are passed through verbatim — the writer owns them
+// (doctrine + review gate), and silently truncating outbound copy would be worse
+// than the engine's load-net rejecting it. Only the workflow-managed metadata
+// (`contexte`) is sanitized, so it never blocks an otherwise-good lead at load.
 function buildApproved(draft, storeKey) {
   const variables = { ...draft.messages };
   const v = storeKey && contextValue(draft.context);
@@ -197,31 +201,36 @@ function buildApproved(draft, storeKey) {
 // ---- orchestration (the workflow body; env carries the injected runtime globals) ----
 
 async function batchReview(env, drafts, { sequenceKeys, maxWords, judgeModel, reviewBatchSize }) {
-  const RS = reviewSchema();
   const batches = chunk(drafts, reviewBatchSize);
   const lists = await env.parallel(batches.map((b) => async () =>
     env.agent(buildReviewPrompt({ batch: b, sequenceKeys, maxWords }),
-      { schema: RS, model: judgeModel, phase: "review", label: `review:${b.length}` })));
+      { schema: REVIEW_SCHEMA, model: judgeModel, phase: "review", label: `review:${b.length}` })));
   const verdicts = [];
   for (const l of lists) if (l && Array.isArray(l.verdicts)) verdicts.push(...l.verdicts);
   return verdicts;
 }
 
+async function reviewAndSplit(env, drafts, opts) {
+  return splitVerdicts(drafts, await batchReview(env, drafts, opts));
+}
+
 async function runSourcing(env) {
-  const { agent, pipeline, args } = env;
-  const candidats = (args && args.candidats) || [];
-  const prompts = (args && args.prompts) || {};
-  const sequenceKeys = (args && args.sequence_keys) || [];
-  const enrich = (args && args.enrich) || { enabled: false };
-  const models = (args && args.models) || {};
+  const { agent, pipeline } = env;
+  const { candidats = [], prompts = {}, sequence_keys: sequenceKeys = [], enrich = { enabled: false },
+    models = {}, review = {}, review_batch_size: reviewBatchSize = 8 } = env.args || {};
   const scoreModel = models.scoring || "haiku";
   const writeModel = models.writing || "sonnet";
   const judgeModel = models.judge || "sonnet";
-  const reviewBatchSize = (args && args.review_batch_size) || 8;
-  const maxWords = (args && args.review && args.review.max_words) || 75;
   const storeKey = parseStoreKey(enrich.store);
   const MSG_SCHEMA = messagesSchema(sequenceKeys);
-  const reviewOpts = { sequenceKeys, maxWords, judgeModel, reviewBatchSize };
+  const reviewOpts = { sequenceKeys, maxWords: review.max_words || 75, judgeModel, reviewBatchSize };
+
+  // Single write call shape, shared by the first pass and the regeneration.
+  const writeDraft = async (draft, label, feedback) => {
+    const out = await agent(buildWritePrompt({ messagesPrompts: prompts, sequenceKeys, lead: draft.lead, context: draft.context, feedback }),
+      { schema: MSG_SCHEMA, model: writeModel, phase: "write", label });
+    return { ...draft, messages: out && out.messages };
+  };
 
   if (!candidats.length) return { approuves: [] };
 
@@ -232,40 +241,25 @@ async function runSourcing(env) {
       { schema: VERDICT_SCHEMA, model: scoreModel, phase: "score", label: `score:${leadLabel(lead)}` }),
     async (verdict, lead, i) => {
       if (!verdict || !verdict.qualifie) return null;
-      let context = null;
-      if (enrich.enabled) {
-        context = await agent(buildEnrichPrompt(enrich.directive, lead),
-          { schema: ENRICH_SCHEMA, model: enrich.model || judgeModel, agentType: enrich.agent_type || "general-purpose", phase: "enrich", label: `enrich:${leadLabel(lead)}` });
-      }
+      const context = enrich.enabled
+        ? await agent(buildEnrichPrompt(enrich.directive, lead),
+            { schema: ENRICH_SCHEMA, model: enrich.model || judgeModel, agentType: enrich.agent_type || "general-purpose", phase: "enrich", label: `enrich:${leadLabel(lead)}` })
+        : null;
       return { id: draftId(lead, i), lead, context };
     },
-    async (acc, lead) => {
-      if (!acc) return null;
-      const out = await agent(buildWritePrompt({ messagesPrompts: prompts, sequenceKeys, lead, context: acc.context }),
-        { schema: MSG_SCHEMA, model: writeModel, phase: "write", label: `write:${leadLabel(lead)}` });
-      return { ...acc, messages: out && out.messages };
-    },
+    (acc) => (acc ? writeDraft(acc, `write:${leadLabel(acc.lead)}`) : null),
   );
 
   const drafts = filterDrafts(written);
   if (!drafts.length) return { approuves: [] };
 
-  const verdicts = await batchReview(env, drafts, reviewOpts);
-  const { approuves, aRejeter } = splitVerdicts(drafts, verdicts);
+  const { approuves, aRejeter } = await reviewAndSplit(env, drafts, reviewOpts);
 
-  // One regeneration of the rejects, then a single re-review.
+  // One regeneration of the rejects (with the verdict as feedback), then a single re-review.
   let regenPass = [];
   if (aRejeter.length) {
-    const regen = await env.parallel(aRejeter.map((d) => async () => {
-      const out = await agent(buildWritePrompt({ messagesPrompts: prompts, sequenceKeys, lead: d.lead, context: d.context, feedback: d.verdict }),
-        { schema: MSG_SCHEMA, model: writeModel, phase: "write", label: `rewrite:${d.id}` });
-      return out && out.messages ? { id: d.id, lead: d.lead, context: d.context, messages: out.messages } : null;
-    }));
-    const regenDrafts = filterDrafts(regen);
-    if (regenDrafts.length) {
-      const regenVerdicts = await batchReview(env, regenDrafts, reviewOpts);
-      regenPass = splitVerdicts(regenDrafts, regenVerdicts).approuves;
-    }
+    const regen = filterDrafts(await env.parallel(aRejeter.map((d) => () => writeDraft(d, `rewrite:${d.id}`, d.verdict))));
+    if (regen.length) regenPass = (await reviewAndSplit(env, regen, reviewOpts)).approuves;
   }
 
   return { approuves: [...approuves, ...regenPass].map((d) => buildApproved(d, storeKey)) };
@@ -274,7 +268,7 @@ async function runSourcing(env) {
 module.exports = {
   interpolate, VERDICT_SCHEMA, leadId, leadLabel, draftId, buildScorePrompt,
   ENRICH_SCHEMA, buildEnrichPrompt, messagesSchema, buildWritePrompt,
-  reviewSchema, buildReviewPrompt,
+  REVIEW_SCHEMA, buildReviewPrompt,
   filterDrafts, splitVerdicts, chunk, parseStoreKey, buildApproved,
-  batchReview, runSourcing,
+  batchReview, reviewAndSplit, runSourcing,
 };
