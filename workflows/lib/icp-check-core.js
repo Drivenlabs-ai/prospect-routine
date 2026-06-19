@@ -54,4 +54,4 @@ async function runCheck(env) {
   return { verdicts };
 }
 
-module.exports = { interpolate, VERDICT_SCHEMA, prospectBlock, buildScorePrompt, pairVerdict, runCheck };
+module.exports = { interpolate, VERDICT_SCHEMA, PROSPECT_FIELDS, prospectBlock, buildScorePrompt, pairVerdict, runCheck };

@@ -19,6 +19,19 @@ test("VERDICT_SCHEMA matches prod scoring (parity lock)", () => {
   assert.deepEqual(check.VERDICT_SCHEMA, score.VERDICT_SCHEMA);
 });
 
+test("PROSPECT_FIELDS is identical to prod scoring (parity lock)", () => {
+  // The single-lead buildScorePrompt assertion can't catch a field added on one side only;
+  // compare the field lists directly so a new sourcing field can't silently drift.
+  assert.ok(Array.isArray(check.PROSPECT_FIELDS), "icp-check must export PROSPECT_FIELDS");
+  assert.deepEqual(check.PROSPECT_FIELDS, score.PROSPECT_FIELDS);
+});
+
+test("interpolate matches prod scoring on spaced/missing/null tokens (parity lock)", () => {
+  const tpl = "{{ jobTitle }}|{{missing}}|{{nul}}";
+  const data = { jobTitle: "Gérante", nul: null };
+  assert.equal(check.interpolate(tpl, data), score.interpolate(tpl, data));
+});
+
 // ---------------------------------------------------------------------------
 // pairVerdict
 // ---------------------------------------------------------------------------

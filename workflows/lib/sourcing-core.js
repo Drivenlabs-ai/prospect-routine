@@ -266,7 +266,7 @@ async function runSourcing(env) {
 }
 
 module.exports = {
-  interpolate, VERDICT_SCHEMA, leadId, leadLabel, draftId, buildScorePrompt,
+  interpolate, VERDICT_SCHEMA, PROSPECT_FIELDS, leadId, leadLabel, draftId, buildScorePrompt,
   ENRICH_SCHEMA, buildEnrichPrompt, messagesSchema, buildWritePrompt,
   REVIEW_SCHEMA, buildReviewPrompt,
   filterDrafts, splitVerdicts, chunk, parseStoreKey, buildApproved,
