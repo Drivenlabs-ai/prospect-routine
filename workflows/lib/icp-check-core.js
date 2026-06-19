@@ -40,4 +40,18 @@ function pairVerdict(lead, verdict) {
   return { lead, qualifie: !!(verdict && verdict.qualifie), raison: (verdict && verdict.raison) || "" };
 }
 
-module.exports = { interpolate, VERDICT_SCHEMA, prospectBlock, buildScorePrompt, pairVerdict };
+// ---- orchestration (the workflow body; env carries the injected runtime globals) ----
+
+async function runCheck(env) {
+  const { agent, pipeline, args } = env;
+  const sample = (args && args.sample) || [];
+  const prompt = (args && args.prompt_icpFit) || "";
+  const model = (args && args.model) || "haiku";
+  const verdicts = await pipeline(sample,
+    (lead) => agent(buildScorePrompt(prompt, lead),
+      { schema: VERDICT_SCHEMA, model, phase: "run", label: `icp:${(lead && (lead.fullName || lead.linkedinUrl)) || ""}` })
+      .then((v) => pairVerdict(lead, v)));
+  return { verdicts };
+}
+
+module.exports = { interpolate, VERDICT_SCHEMA, prospectBlock, buildScorePrompt, pairVerdict, runCheck };

@@ -32,3 +32,46 @@ test("pairVerdict tolerates a null or incomplete verdict", () => {
   assert.deepEqual(check.pairVerdict(LEAD, null), { lead: LEAD, qualifie: false, raison: "" });
   assert.deepEqual(check.pairVerdict(LEAD, { qualifie: true }), { lead: LEAD, qualifie: true, raison: "" });
 });
+
+// ---------------------------------------------------------------------------
+// runCheck — orchestration validated by a mocked run (no real LLM)
+// ---------------------------------------------------------------------------
+
+async function fakePipeline(items, ...stages) {
+  return Promise.all(items.map(async (item, i) => {
+    let v = item;
+    for (const s of stages) { v = await s(v, item, i); if (v == null) return null; }
+    return v;
+  }));
+}
+function makeEnv(args, agentImpl, spy) {
+  return { args, pipeline: fakePipeline,
+    agent: async (prompt, opts) => { if (spy) spy.push({ prompt, opts }); return agentImpl(prompt, opts); } };
+}
+const SAMPLE = [
+  { linkedinUrl: "https://lk/a", fullName: "A Bon", jobTitle: "Gérant" },
+  { linkedinUrl: "https://lk/b", fullName: "B Hors", jobTitle: "Stagiaire" },
+];
+
+test("runCheck scores each sample lead on Haiku and returns paired verdicts", async () => {
+  const spy = [];
+  const agentImpl = (prompt) => ({ qualifie: /Gérant/.test(prompt), raison: "x" });
+  const out = await check.runCheck(makeEnv(
+    { prompt_icpFit: "score {{jobTitle}}", sample: SAMPLE }, agentImpl, spy));
+  assert.deepEqual(out.verdicts.map((v) => [v.lead.linkedinUrl, v.qualifie]),
+    [["https://lk/a", true], ["https://lk/b", false]]);
+  assert.ok(spy.every((c) => c.opts.model === "haiku" && c.opts.phase === "run"));
+});
+
+test("runCheck keeps a lead even if its agent returns null", async () => {
+  const out = await check.runCheck(makeEnv(
+    { prompt_icpFit: "p", sample: [SAMPLE[0]] }, () => null));
+  assert.deepEqual(out.verdicts, [{ lead: SAMPLE[0], qualifie: false, raison: "" }]);
+});
+
+test("runCheck honours an explicit model override", async () => {
+  const spy = [];
+  await check.runCheck(makeEnv(
+    { prompt_icpFit: "p", sample: [SAMPLE[0]], model: "sonnet" }, () => ({ qualifie: true, raison: "" }), spy));
+  assert.equal(spy[0].opts.model, "sonnet");
+});
