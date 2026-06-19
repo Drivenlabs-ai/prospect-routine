@@ -44,12 +44,12 @@ flowchart TD
 Code/drivenlabs-ai/prospect-routine/                # plugin (repo git, source de vérité)
 ├── .claude-plugin/plugin.json                      # manifeste
 ├── skills/prospect-routine/SKILL.md                # ROUTER (mince, trigger langage naturel)
+├── skills/new-campaign/SKILL.md                    # W1 — créer une campagne (skill piloté par Claude)
 ├── scripts/
 │   ├── routine.py                                  # moteur — sous-commandes atomiques (cf. §5)
 │   └── sync-workflows.sh                            # copie workflows → ~/.claude/workflows/
 ├── workflows/                                       # source versionnée des workflows (fan-out d'agents)
 │   ├── sourcing.workflow.js                        # W3 — GÉNÉRÉ depuis lib/sourcing-core.js
-│   ├── new-campaign.workflow.js                    # W1 phase 2 (autonome) — à venir
 │   ├── icp-check.workflow.js                       # alignement icpFit au setup — GÉNÉRÉ depuis lib/icp-check-core.js
 │   └── lib/                                         # logique déterministe testée + générateur
 │       ├── sourcing-core.js                        # helpers purs + runSourcing (node --test)
@@ -65,7 +65,7 @@ Code/drivenlabs-ai/prospect-routine/                # plugin (repo git, source d
 └── tests/
 
 ~/.claude/workflows/                                # MIROIR runtime (copié par le hook)
-└── *.workflow.js                                    # → deviennent /W1 /W2 /W3 ; appelés d'ici
+└── *.workflow.js                                    # → deviennent /sourcing /icp-check ; appelés d'ici
 
 Drivenlabs Team/Drivenlabs/Prospection/             # intelligence métier (SoT, Drive)
 ├── icp-global.md                                    # positioning transversal (versionné)

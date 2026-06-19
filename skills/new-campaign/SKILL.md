@@ -21,6 +21,9 @@ commandes.
 la phase 2 est **autonome** mais s'arrête à deux gardes — avant toute **mutation Lemlist** et avant le
 **flip `dry_run`**.
 
+**Commandes moteur** : toujours via `uv run python scripts/routine.py <cmd>` (jamais `python3` direct) ;
+les étapes ci-dessous notent le `<cmd>` seul.
+
 ## Quand l'utiliser
 
 - L'utilisateur veut **créer / monter / lancer** une campagne pour une nouvelle verticale ou un segment.
@@ -54,7 +57,7 @@ exigent le jugement de l'utilisateur — ne les devine pas.
 4. **GATE humain** — ne quitte pas la phase 1 tant que l'utilisateur n'a pas **validé explicitement
    l'ICP + l'angle**.
 5. **Acte** — crée le dossier d'état + le `campaign.json` draft (cf. Référence), puis marque l'étape :
-   `python3 scripts/routine.py status --config <campaign.json> --set phase1_done=true`.
+   `status --config <campaign.json> --set phase1_done=true`.
 
 ## Phase 2 — Matérialisation (autonome, gardée)
 
@@ -78,7 +81,7 @@ la phase 1, rédige :
 ### 2. icp-check — aligner le prompt icpFit
 
 Boucle jusqu'à ce que le jugement Haiku colle à l'intention :
-1. `python3 scripts/routine.py source --config <campaign.json> --target 15` → échantillon.
+1. `source --config <campaign.json> --target 15` → échantillon.
 2. Lance le workflow **icp-check** : `args = { prompt_icpFit: <contenu de prompts/icpFit.md>, sample:
    <candidats>, model: "haiku" }` — `sample` = le tableau `candidats` renvoyé par `source`.
 3. Lis les `verdicts`, compare chacun à l'ICP visé, repère les ratés → **édite `prompts/icpFit.md`** →
@@ -88,16 +91,25 @@ Boucle jusqu'à ce que le jugement Haiku colle à l'intention :
 ### 3. W2 — créer la campagne Lemlist
 
 **GARDE : demande le go de l'utilisateur avant la 1re mutation Lemlist** (les étapes ci-dessous créent une
-vraie campagne + liste). Procédure idempotente (cf. spec 02), trace dans `status.w2_steps[]` :
-1. `duplicate-campaign --template-id <DEFAULT_FLOW_TEMPLATE_ID> --name <verticale>` → `campaign_id`
-   (+ `sequence_id`).
-2. `create-list --name <verticale>` → `list_id`.
-3. `verify --config <campaign.json>` → doit être `aligned` (zéro `missing_prompts`) ; sinon corrige les
-   prompts et re-verify.
-4. `register-campaign --registry <campaigns-registry.json> --campaign-json <campaign.json> --data-file
-   <ids> --entry-file <entry>` → écrit le `campaign.json` final (ids remplis) + l'entrée registre.
+vraie campagne + liste).
 
-`DEFAULT_FLOW_TEMPLATE_ID` : cf. Référence.
+**Reprise — lis l'état AVANT d'agir** : `status --config <campaign.json> --get w2_steps`. Saute toute
+étape déjà inscrite (ne re-duplique jamais). **Après chaque étape réussie, inscris-la toi-même** (aucune
+commande ne le fait automatiquement) : `status --config <campaign.json> --set w2_steps=<liste JSON à jour>`.
+
+1. Si `"campaign"` ∉ `w2_steps` : `duplicate-campaign --template-id <DEFAULT_FLOW_TEMPLATE_ID> --name
+   <verticale>` → relève `campaign_id` + `sequence_id` (stdout). Puis `status --set w2_steps=["campaign"]`.
+   `DEFAULT_FLOW_TEMPLATE_ID` : cf. Référence — **si tu ne l'as pas, demande-le à l'utilisateur** (ne
+   l'invente jamais).
+2. Si `"list"` ∉ `w2_steps` : `create-list --name <verticale>` → relève `list_id`. Puis `w2_steps` += `"list"`.
+3. `verify --campaign-id <campaign_id de l'étape 1> --prompts-dir <Prospection/<Vertical>/prompts>` → doit
+   être `aligned` (zéro `missing_prompts`) ; sinon corrige les prompts et re-verify. (On passe
+   `--campaign-id`, **pas** `--config` : à ce stade le `campaign.json` n'a pas encore les ids.)
+4. Si `"register"` ∉ `w2_steps` : assemble le **contenu final** de `campaign.json` (le draft + `campaign_id`
+   et `list_id` des étapes 1–2), écris-le dans un fichier temporaire, et inscris l'entrée registre
+   (forme en Référence) dans un autre. Puis `register-campaign --registry <…/campaigns-registry.json>
+   --campaign-json <campaign.json> --data-file <fichier-campaign-final> --entry-file <fichier-entrée>`
+   (le `--data-file` est recopié tel quel dans `--campaign-json`). Puis `w2_steps` += `"register"`.
 
 ### 4. Smoke test — 1 lead en review
 
@@ -115,9 +127,10 @@ tourner, et le **launch reste un geste séparé et gardé** (jamais en W1).
 
 ## Robustesse & reprise
 
-- **Reprise** : `status` porte `phase1_done` et `w2_steps[]`. Au re-run, saute ce qui est fait — ne
-  re-duplique jamais la campagne.
-- **Idempotence W2** : chaque étape franchie est inscrite ; check-exists avant create (spec 02).
+- **Reprise = `status.w2_steps[]`, tenue à la main.** Aucune commande moteur ne l'écrit toute seule :
+  c'est TOI qui inscris chaque étape via `status --set` (cf. §3) et qui lis `status --get w2_steps` avant
+  d'agir. Sans cette discipline, un re-run **re-duplique la campagne** — c'est le seul garde-fou contre ça.
+- `phase1_done` marque la fin de la phase 1 (idem : posé par toi en Phase 1 §5).
 - **Jamais** d'overwrite de fichier local sans confirmation. **Jamais** de launch en W1.
 
 ## Référence

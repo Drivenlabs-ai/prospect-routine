@@ -24,7 +24,7 @@ Le pont entre les trois : le **`campaign_id`**. SSoT strict — Lemlist porte la
 
 ## Workflows : pourquoi un hook de sync
 
-« Workflow » n'est pas un composant de plugin reconnu par Claude Code. Les `.workflow.js` doivent vivre dans `~/.claude/workflows/` pour devenir des workflows sauvegardés (`/W1`, `/W2`…). Le repo reste la **source de vérité** ; le hook `SessionStart` (`scripts/sync-workflows.sh`) recopie idempotemment le repo vers cet emplacement à chaque démarrage — install, mise à jour et auto-réparation automatiques.
+« Workflow » n'est pas un composant de plugin reconnu par Claude Code. Les `.workflow.js` doivent vivre dans `~/.claude/workflows/` pour devenir des workflows sauvegardés (`/sourcing`, `/icp-check`…). Le repo reste la **source de vérité** ; le hook `SessionStart` (`scripts/sync-workflows.sh`) recopie idempotemment le repo vers cet emplacement à chaque démarrage — install, mise à jour et auto-réparation automatiques.
 
 ## Installation
 
