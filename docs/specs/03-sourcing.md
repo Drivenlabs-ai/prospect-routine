@@ -170,6 +170,6 @@ minimalement câblée ; le câblage fin (résolution slug, dry-run, enchaînemen
 
 ## 8. Hors-scope (specs suivantes)
 
-La **validation du prompt icpFit** (graders : holdout, juge labels — spec 04), **W1** (création
+La **validation du prompt icpFit** (passe d'alignement `icp-check` au setup — spec 04), **W1** (création
 interactive), le **routeur** (point d'entrée). W3 *exécute* le run ; il ne valide pas la qualité du
 prompt ni ne crée la verticale.

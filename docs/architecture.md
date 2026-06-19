@@ -25,13 +25,13 @@ flowchart TD
   R --> SCR
   ORCH --> SCR["routine.py — IO Lemlist deterministe + etat (zero LLM)"]
   ORCH --> CRAFT["Craft — /lemlist + GTM vendorises"]
-  ORCH --> GRAD["Graders — eval.workflow + juge Sonnet"]
-  GRAD --> CRAFT
+  ORCH --> ICPC["icp-check — alignement icpFit au setup (Haiku)"]
+  ICPC --> CRAFT
   SCR --> LEM["Lemlist API"]
   SCR --> STATE["Etat local — state / status / receipts"]
 ```
 
-**Règle de dépendance** : Router → Orchestration → (Scripts | Craft | Graders) → (Lemlist | State). Jamais l'inverse.
+**Règle de dépendance** : Router → Orchestration → (Scripts | Craft) → (Lemlist | State). Jamais l'inverse.
 - `routine.py` est le **seul** point d'IO Lemlist déterministe (testable, pièges WAF/retry centralisés, zéro LLM).
 - Les workflows **n'écrivent dans Lemlist que via `routine.py`** — exception unique documentée : l'agent *sourcing* de W3 fait le `curl` People DB (il lit la clé locale).
 - La **craft** ne fait aucun IO (guidance/génération uniquement).
@@ -50,7 +50,7 @@ Code/drivenlabs-ai/prospect-routine/                # plugin (repo git, source d
 ├── workflows/                                       # source versionnée des workflows (fan-out d'agents)
 │   ├── sourcing.workflow.js                        # W3 — GÉNÉRÉ depuis lib/sourcing-core.js
 │   ├── new-campaign.workflow.js                    # W1 phase 2 (autonome) — à venir
-│   ├── eval.workflow.js                            # harnais graders — à venir
+│   ├── icp-check.workflow.js                       # alignement icpFit au setup — GÉNÉRÉ depuis lib/icp-check-core.js
 │   └── lib/                                         # logique déterministe testée + générateur
 │       ├── sourcing-core.js                        # helpers purs + runSourcing (node --test)
 │       └── build-workflow.js                       # génère le .workflow.js self-contained
@@ -73,8 +73,8 @@ Drivenlabs Team/Drivenlabs/Prospection/             # intelligence métier (SoT,
 └── <Vertical>/
     ├── icp.md · persona.md · pain-points.md · value-proposition.md · triggers.md
     ├── campaign.json                                # linkage + config (cf. §5)
-    ├── prompts/ : icpFit.md + <step>.md (1 par message)
-    └── eval-dataset.json + eval-holdout.json
+    └── prompts/ : icpFit.md + <step>.md (1 par message)
+    # (pas de dataset : icp-check teste l'icpFit sur un échantillon live au setup, cf. spec 04)
 
 ~/.claude/prospect-routine/<slug>/                   # état machine (jamais Drive)
 ├── state.json        (seen_lead_ids, history)
@@ -93,17 +93,17 @@ Drivenlabs Team/Drivenlabs/Prospection/             # intelligence métier (SoT,
 | **routine.py** | Toutes les lectures/écritures Lemlist + l'état, déterministe | aucun LLM, aucune décision métier |
 | **Workflows** W1/W2/W3 | Orchestrent agents + scripts ; idempotents/reprenables (`status.json`) | pas d'IO Lemlist en direct (via routine.py) |
 | **Craft** (`/lemlist` + GTM) | Génère les artefacts (ICP, prompts) guidés, enveloppés de la voix | aucun IO, aucune décision de gate |
-| **Graders** | GATE 1 (eval Haiku + holdout) · GATE 2 (juge Sonnet + rubrique) | ne modifient pas les fichiers |
+| **icp-check** | Alignement icpFit au setup : Haiku juge un échantillon → verdicts bruts (parité prod) | ne décide pas seul du gate (Claude de session + sign-off humain) ; ne modifie aucun fichier |
 | **State** | `state` (seen/history) · `status` (phases/reprise) · `receipts` (idempotence) | — |
 
 ---
 
 ## 4. Flux des 3 commandes (modèle C)
 
-**Créer** : Router → **W1** [phase 1 interactive : recherche + Q&A → validation ICP/angle] → [phase 2 autonome : craft génère icp/pains/prompts → **GATE 1** → **GATE 2**] → **W2** [crée campagne + séquence multicanal (template) + liste audience] → smoke 1 lead → maj `campaigns-registry`.
+**Créer** : Router → **W1** [phase 1 interactive : recherche + Q&A → validation ICP/angle] → [phase 2 autonome : craft génère icp/pains/prompts → **icp-check** (alignement icpFit sur échantillon + sign-off humain)] → **W2** [crée campagne + séquence multicanal (template) + liste audience] → smoke 1 lead → maj `campaigns-registry`.
 
 **Modifier** : Router → `resolve` → `fetch` (snapshot Lemlist) → edit ciblé sous garde `edit_in_progress` :
-- *ICP* → fichiers locaux (draft `.tmp` → promotion après re-GATE 1) ;
+- *ICP* → fichiers locaux (draft `.tmp` → promotion après re-`icp-check`) ;
 - *+étape* → mutation séquence Lemlist + nouvelle variable + `verify` ;
 - *timing* → mutation des délais.
 
@@ -155,4 +155,4 @@ Drivenlabs Team/Drivenlabs/Prospection/             # intelligence métier (SoT,
 
 ## Prochaine étape
 
-Spec par spec (ordre des dépendances) : **routine.py (scripts atomiques)** d'abord (socle), puis **W2**, **W3**, **graders**, **W1**, **Router**. Chaque spec : `/brainstorming` → design → implémentation (+ `/skill-creator` pour les skills, lecture de la doc Claude Code workflows pour W1/W2/W3).
+Spec par spec (ordre des dépendances) : **routine.py (scripts atomiques)** d'abord (socle), puis **W2**, **W3**, **icp-check**, **W1**, **Router**. Chaque spec : `/brainstorming` → design → implémentation (+ `/skill-creator` pour les skills, lecture de la doc Claude Code workflows pour W1/W2/W3).

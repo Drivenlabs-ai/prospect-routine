@@ -7,6 +7,13 @@ auteurs: [Alexandre Bouchez, Claude]
 
 # prospect-routine v2 — design à valider
 
+> **Révision 2026-06-19 — graders → `icp-check`.** Les « 2 graders bloquants » (GATE 1 ≥ 95 % sur
+> holdout, GATE 2 juge Sonnet, datasets labellisés) décrits plus bas (§4, §11.6) ont été **abandonnés
+> comme sur-ingénierie** à cette échelle. Remplacés par une **passe d'alignement `icp-check` au setup**
+> (mini-workflow : Haiku juge un échantillon → Claude de session compare à l'intention, itère le prompt
+> → sign-off humain). Référence : `docs/specs/04-icp-check.md`. Les mentions « graders / GATE / holdout »
+> ci-dessous sont la **vision initiale, superseded** — conservées pour l'historique.
+
 Refonte de `/prospect-routine` : passer d'un moteur mono-workflow à un **routeur** qui orchestre setup pro (via le métier `/lemlist`), run, et édition ciblée — avec un découpage **single source of truth** strict entre Lemlist et le local.
 
 > **Commente directement dans ce fichier** (sous chaque décision, ou en annotation). Je rédige le plan d'implémentation v1 une fois les 4 décisions tranchées.
