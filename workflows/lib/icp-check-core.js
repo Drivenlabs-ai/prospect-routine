@@ -36,4 +36,8 @@ function buildScorePrompt(icpFitTemplate, lead) {
   return `${interpolate(icpFitTemplate, lead)}\n\n${prospectBlock(lead)}`;
 }
 
-module.exports = { interpolate, VERDICT_SCHEMA, prospectBlock, buildScorePrompt };
+function pairVerdict(lead, verdict) {
+  return { lead, qualifie: !!(verdict && verdict.qualifie), raison: (verdict && verdict.raison) || "" };
+}
+
+module.exports = { interpolate, VERDICT_SCHEMA, prospectBlock, buildScorePrompt, pairVerdict };

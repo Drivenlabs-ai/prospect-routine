@@ -18,3 +18,17 @@ test("buildScorePrompt is byte-identical to prod scoring (parity lock)", () => {
 test("VERDICT_SCHEMA matches prod scoring (parity lock)", () => {
   assert.deepEqual(check.VERDICT_SCHEMA, score.VERDICT_SCHEMA);
 });
+
+// ---------------------------------------------------------------------------
+// pairVerdict
+// ---------------------------------------------------------------------------
+
+test("pairVerdict attaches the lead to its verdict", () => {
+  assert.deepEqual(check.pairVerdict(LEAD, { qualifie: true, raison: "ICP pile" }),
+    { lead: LEAD, qualifie: true, raison: "ICP pile" });
+});
+
+test("pairVerdict tolerates a null or incomplete verdict", () => {
+  assert.deepEqual(check.pairVerdict(LEAD, null), { lead: LEAD, qualifie: false, raison: "" });
+  assert.deepEqual(check.pairVerdict(LEAD, { qualifie: true }), { lead: LEAD, qualifie: true, raison: "" });
+});
