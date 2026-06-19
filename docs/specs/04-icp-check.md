@@ -1,6 +1,6 @@
 ---
 spec: 04 — icp-check (passe d'alignement icpFit au setup)
-statut: à valider
+statut: workflow livré et testé (TDD) — 2026-06-19 ; généré depuis workflows/lib/icp-check-core.js, gardé par tests/js/icp-check-workflow-sync.test.js
 date: 2026-06-18
 dépend de: docs/specs/01-routine-engine.md, docs/specs/03-sourcing.md
 ---
