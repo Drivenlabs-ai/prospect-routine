@@ -6,30 +6,38 @@ une étape séparée, plus bas). Pré-requis : campagne résolue (`resolve` a do
 
 ## Séquence (ordre fixe)
 
+Deux données circulent en mémoire entre les étapes (pas via `--config`) : les `prompts` de `prepare` et
+les `sequence_keys` de `verify`. Tout le reste se relit depuis `<config_path>`. Les flags `--input`,
+`--sourced-file`, `--entry-file` attendent un **chemin de fichier** que tu écris d'abord (le moteur les
+lit sur disque), pas une valeur inline.
+
 1. **prepare** — `prepare --config <config_path> --date <date>` → `{config, seenIds, prompts, dry_run}`.
-   Pré-vol auth (`GET /team`) : STOP si KO ; prompt manquant ou vide : STOP. `prompts` est un dict plat
-   `{icpFit, <step>:…}`.
+   Pré-vol auth (`GET /team`) : STOP si KO ; prompt manquant ou vide : STOP. `prompts` = dict plat
+   `{icpFit, <step>:…}`, à porter jusqu'à l'étape 4.
 2. **source** — `source --config <config_path>` → `{candidats, limitation, exhausted}`. `candidats` =
-   leads inédits (déjà-vus exclus) projetés en forme lead ; `limitation` = quota People DB restant,
-   s'arrêter s'il est bas.
-3. **verify** — `verify --config <config_path>` → `{aligned, prompt_keys, …}`. `aligned` doit être vrai
-   (sinon corriger les prompts : un lead sans ses variables ne se lancera pas). `prompt_keys` = les clés
-   de message = `sequence_keys` pour le workflow.
+   leads inédits projetés en forme lead. Écris ce tableau `candidats` dans un fichier : il resservira au
+   `record-run` (§6). S'arrêter si `limitation` (quota People DB) est bas.
+3. **verify** — `verify --config <config_path>` → `{aligned, sequence_variables, …}`. `aligned` doit être
+   vrai (sinon corriger les prompts : un lead sans ses variables ne se lancera pas). `sequence_keys` =
+   les variables de message de la séquence = `sequence_variables` hors champs natifs (firstName,
+   companyName, jobTitle…) ; `aligned` garantit qu'un prompt existe pour chacune.
 4. **workflow sourcing** — invoquer le workflow `sourcing` avec
-   `args = { candidats, prompts: <prompts de prepare>, sequence_keys: <prompt_keys de verify>,
-   models: <config.models>, enrich: <config.enrich> }` → `{ approuves: [{lead, variables}] }`.
-5. **load** — pour chaque approuvé : `load-lead --config <config_path> --input <{lead,variables}>`
-   (ajouter `--confirm` seulement si `config.dry_run` est `false`). Charge en review, idempotent (reçus).
-6. **record-run** — `record-run --config <config_path> --date <date> --sourced-file <tous les candidats
-   sourcés> --true <nb chargés> --false <nb écartés>` → déjà-vus glissants + historique. Tous les
-   candidats sourcés entrent dans les déjà-vus, même écartés au score (évite de les re-scorer).
-7. **log** — `log --config <config_path> --entry-file <résumé du run>`.
+   `args = { candidats, prompts: <ceux de prepare>, sequence_keys: <de l'étape 3>, models: <config.models>,
+   enrich: <config.enrich> }` → `{ approuves: [{lead, variables}] }`.
+5. **load** — pour chaque approuvé : écris son `{lead, variables}` dans un fichier, puis `load-lead
+   --config <config_path> --input <chemin> --confirm`. Charge en review, idempotent (reçus). `--confirm`
+   est toujours passé ; c'est `dry_run` qui garde (ci-dessous).
+6. **record-run** — `record-run --config <config_path> --date <date> --sourced-file <chemin du fichier
+   candidats de l'étape 2> --true <nb chargés> --false <nb écartés>` → déjà-vus glissants + historique.
+   Tous les candidats sourcés entrent dans les déjà-vus, même écartés au score (évite de les re-scorer).
+7. **log** — écris le résumé du run dans un fichier, puis `log --config <config_path> --entry-file <chemin>`.
 
 ## dry_run
 
-`config.dry_run: true`, ou `load-lead` sans `--confirm` → renvoie le plan, zéro écriture réseau. Charger
-réellement exige `dry_run: false` ET `--confirm`. Ne jamais flip `dry_run` dans le run — c'est le geste
-final de `new-campaign`, sur confirmation humaine.
+`config.dry_run: true` → `load-lead` renvoie le plan et n'écrit rien, même avec `--confirm` : c'est la
+garde. Le run passe toujours `--confirm` (son rôle est de charger en review) ; sur une campagne encore en
+`dry_run: true`, rien n'est écrit. Charger réellement = campagne en `dry_run: false`. Ne jamais flip
+`dry_run` dans le run — c'est le geste final de `new-campaign`, sur confirmation humaine.
 
 ## Launch — étape séparée et gardée
 

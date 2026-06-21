@@ -116,8 +116,8 @@ w2_steps`) et saute toute étape déjà inscrite. Après chaque étape, ré-insc
 
 1. `source --config <campaign.json> --target 1` → 1 candidat.
 2. Lance le workflow **sourcing** sur ce candidat → `{ lead, variables }`.
-3. `load-lead --config <campaign.json> --input <{lead,variables}> --confirm` → charge le lead **en
-   review** (jamais lancé).
+3. Écris ce `{lead, variables}` dans un fichier, puis `load-lead --config <campaign.json> --input <chemin>
+   --confirm` (`--input` est un chemin de fichier, lu sur disque) → charge le lead **en review** (jamais lancé).
 4. L'utilisateur revoit le lead dans Lemlist (identité + messages générés).
 
 ### 5. Passer en prêt (flip dry_run)

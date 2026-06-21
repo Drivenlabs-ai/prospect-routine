@@ -23,6 +23,9 @@ Avant un run, résoudre la campagne : `resolve --registry <racine Prospection/ca
 --slug <ce que dit l'utilisateur>` → `campaign_id` + `config_path`. Slug introuvable → demander lequel
 (le registre liste les campagnes).
 
+Demande de prospection sans action précisée (« occupe-toi de la prospection X ») → proposer le run du
+jour, la valeur par défaut.
+
 Commandes moteur : via `uv run python scripts/routine.py <cmd>`.
 
 ## Run quotidien
@@ -35,7 +38,7 @@ gardée — cf. Référence). Pipeline en ordre fixe, chaque étape nourrit la s
 2. `source --config <config_path>` → candidats inédits (déjà-vus exclus, quota People DB lu).
 3. `verify --config <config_path>` → clés de message requises + garde du contrat clés ↔ séquence.
 4. workflow `sourcing` sur les candidats → approuvés `{lead, variables}`.
-5. `load-lead` par approuvé → lead en review.
+5. `load-lead` par approuvé → lead en review (gardé par `dry_run` ; jamais de launch ici).
 6. `record-run` + `log` → déjà-vus, historique, journal.
 
 Séquence détaillée (flags, assemblage des args du workflow, `dry_run`, `launch`, gestion d'erreur) :
