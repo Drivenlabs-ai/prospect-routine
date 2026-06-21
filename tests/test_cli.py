@@ -39,7 +39,8 @@ def test_cli_status_set_then_get(tmp_path):
 def test_cli_record_run_then_dedup_flags_seen(tmp_path):
     cfg = _campaign(tmp_path)
     sourced = tmp_path / "sourced.json"
-    sourced.write_text(json.dumps(["https://lk/a"]))
+    # forme réelle : le fichier candidats porte des dicts projetés (pas des ids nus)
+    sourced.write_text(json.dumps([{"linkedinUrl": "https://lk/a", "fullName": "A B"}]))
     r1 = run("record-run", "--config", cfg, "--date", "2026-06-15",
              "--sourced-file", str(sourced), "--true", "1", "--false", "0")
     assert r1.returncode == 0, r1.stderr

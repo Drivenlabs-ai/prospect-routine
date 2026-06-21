@@ -123,10 +123,14 @@ def cmd_register_campaign(a):
 def cmd_record_run(a):
     cfg = config.load_cfg_only(a.config)
     sourced = json.loads(Path(a.sourced_file).read_text(encoding="utf-8"))
-    st = state.apply_commit(state.load_state(cfg["state_dir"]), a.date, sourced, a.true, a.false,
+    # Le fichier candidats porte des dicts projetés ; `seen` n'indexe que la clé de dédup du
+    # sourcing (linkedinUrl). Extraire cette clé (tolère un fichier déjà réduit à des ids nus).
+    keys = [c.get("linkedinUrl") if isinstance(c, dict) else c for c in sourced]
+    keys = [k for k in keys if k]
+    st = state.apply_commit(state.load_state(cfg["state_dir"]), a.date, keys, a.true, a.false,
                             seen_cap=cfg.get("seen_ids_inline_max", 3000))
     state.save_state(cfg["state_dir"], st)
-    _emit({"seen_total": len(st["seen_lead_ids"]), "added": len(sourced)})
+    _emit({"seen_total": len(st["seen_lead_ids"]), "added": len(keys)})
 
 
 def cmd_status(a):
