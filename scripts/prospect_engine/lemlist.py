@@ -79,8 +79,16 @@ def create_lead(key, campaign_id, payload):
     return api_call("POST", f"/campaigns/{campaign_id}/leads?deduplicate=true", key, payload)
 
 
-def set_variables(key, lead_id, variables):
-    return api_call("POST", f"/leads/{lead_id}/variables", key, variables)
+def update_variable(key, lead_id, name, value):
+    """PATCH la VALEUR d'une variable existante du lead (défaut comme `icebreaker`, ou custom déjà
+    définie). `POST /variables` ne sait que créer et refuse un nom existant ; c'est PATCH qui pose
+    la valeur (cf. doc API `add-lead-variables`)."""
+    return api_call("PATCH", f"/leads/{lead_id}/variables", key, {name: value})
+
+
+def create_variable(key, lead_id, name, value):
+    """POST crée une variable custom encore sans définition (échoue si le nom existe déjà)."""
+    return api_call("POST", f"/leads/{lead_id}/variables", key, {name: value})
 
 
 def launch_lead(key, lead_id):

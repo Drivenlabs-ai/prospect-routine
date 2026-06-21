@@ -68,6 +68,24 @@ def _ok(status):
     return 200 <= status < 300
 
 
+def _is_not_found(res):
+    """Réponse Lemlist 'Variables X not found' → la variable n'a pas encore de définition (à créer).
+    Toute AUTRE erreur ne doit PAS déclencher de création (un POST de repli créerait un doublon suffixé)."""
+    s = res.get("status") if isinstance(res, dict) else res
+    return "not found" in str(s or "").lower()
+
+
+def _entity_id(res):
+    """_id d'une réponse Lemlist, que l'entité soit à plat ou nichée sous `data`
+    (POST /contacts et create-lead renvoient `{success, data: {_id}}`)."""
+    if not isinstance(res, dict):
+        return None
+    if res.get("_id"):
+        return res["_id"]
+    data = res.get("data")
+    return data.get("_id") if isinstance(data, dict) else None
+
+
 # ---------- orchestration ----------
 
 def load_lead(key, lead, variables, campaign_id, list_id, state_dir, *, confirm, dry_run):
@@ -96,9 +114,9 @@ def load_lead(key, lead, variables, campaign_id, list_id, state_dir, *, confirm,
     # 1. upsert contact (identité)
     if stage not in ("upserted", "listed", "created"):
         st, res = lemlist.upsert_contact(key, contact_payload(lead))
-        if not _ok(st) or not isinstance(res, dict) or not (res.get("_id")):
+        contact_id = _entity_id(res)
+        if not _ok(st) or not contact_id:
             return {"ok": False, "stage_reached": stage, "error": {"stage": "upsert", "status": st, "detail": str(res)[:120]}}
-        contact_id = res["_id"]
         receipt("upserted")
 
     # 2. add to list (audience non synchronisée) — best-effort, ne bloque pas la livraison
@@ -109,7 +127,7 @@ def load_lead(key, lead, variables, campaign_id, list_id, state_dir, *, confirm,
     # 3. create lead in campaign (deduplicate=true natif)
     if stage != "created":
         st, res = lemlist.create_lead(key, campaign_id, lead_payload(lead))
-        lead_id = res.get("_id") if isinstance(res, dict) else None
+        lead_id = _entity_id(res)
         if _ok(st) and not lead_id:
             receipt("dup", ok=False)  # email déjà dans une autre campagne → non inséré (natif)
             return {"skipped": True, "reason": "cross_campaign_email"}
@@ -117,11 +135,16 @@ def load_lead(key, lead, variables, campaign_id, list_id, state_dir, *, confirm,
             return {"ok": False, "stage_reached": "listed", "error": {"stage": "create", "status": st, "detail": str(res)[:120]}}
         receipt("created")
 
-    # 4. set variables (messages free-form)
-    st, res = lemlist.set_variables(key, lead_id, variables)
-    if not _ok(st):
-        return {"ok": False, "stage_reached": "created", "lead_id": lead_id,
-                "error": {"stage": "variables", "status": st, "detail": str(res)[:120]}}
+    # 4. set variables (messages free-form) — PATCH pose la valeur d'une variable existante
+    #    (défaut comme `icebreaker`, ou custom déjà définie) ; POST en repli pour créer une
+    #    variable custom encore sans définition. POST seul échoue sur tout nom existant.
+    for name, value in variables.items():
+        st, res = lemlist.update_variable(key, lead_id, name, value)
+        if not _ok(st) and _is_not_found(res):
+            st, res = lemlist.create_variable(key, lead_id, name, value)
+        if not _ok(st):
+            return {"ok": False, "stage_reached": "created", "lead_id": lead_id,
+                    "error": {"stage": "variables", "name": name, "status": st, "detail": str(res)[:120]}}
     receipt("varset")
     return {"ok": True, "skipped": False, "lead_id": lead_id, "contact_id": contact_id, "stage_reached": "varset"}
 

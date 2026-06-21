@@ -38,7 +38,8 @@ def rec(monkeypatch):
     """Recorder : remplace les wrappers lemlist, journalise les appels, réponses configurables."""
     calls = []
     resp = {"upsert_contact": (201, {"_id": "ctc_1"}), "add_to_list": (200, {}),
-            "create_lead": (200, {"_id": "lea_1"}), "set_variables": (200, {}),
+            "create_lead": (200, {"_id": "lea_1"}),
+            "update_variable": (200, {"ok": True}), "create_variable": (200, {"ok": True}),
             "launch_lead": (200, {}),
             "get_lead": (200, {"_id": "lea_1", "variables": {"icebreaker": "x", "followup": "x", "closing": "x"}})}
 
@@ -67,8 +68,19 @@ def test_load_lead_fresh_runs_full_chain_and_writes_varset(rec, tmp_path):
     out = delivery.load_lead("KEY", LEAD, CLEAN, "cam_1", "clt_1", str(tmp_path),
                              confirm=True, dry_run=False)
     assert out["ok"] and out["lead_id"] == "lea_1"
-    assert rec["names"]() == ["upsert_contact", "add_to_list", "create_lead", "set_variables"]
+    assert rec["names"]() == ["upsert_contact", "add_to_list", "create_lead", "update_variable"]
     assert receipts.lookup(str(tmp_path), "cam_1", "https://lk/in/m")["stage"] == "varset"
+
+
+def test_load_lead_extracts_id_from_wrapped_response(rec, tmp_path):
+    # API réelle : POST /contacts (et create-lead) nichent l'entité sous `data`,
+    # avec un statut 201. L'id doit être extrait de data._id, pas seulement du top-level.
+    rec["resp"]["upsert_contact"] = (201, {"success": True, "data": {"_id": "ctc_w"}})
+    rec["resp"]["create_lead"] = (201, {"success": True, "data": {"_id": "lea_w"}})
+    out = delivery.load_lead("KEY", LEAD, CLEAN, "cam_1", "clt_1", str(tmp_path),
+                             confirm=True, dry_run=False)
+    assert out["ok"] and out["lead_id"] == "lea_w" and out["contact_id"] == "ctc_w"
+    assert rec["names"]() == ["upsert_contact", "add_to_list", "create_lead", "update_variable"]
 
 
 def test_load_lead_skips_when_already_varset(rec, tmp_path):
@@ -85,8 +97,28 @@ def test_load_lead_resumes_from_created_only_sets_variables(rec, tmp_path):
                                             "contact_id": "ctc_1", "lead_id": "lea_1"})
     out = delivery.load_lead("KEY", LEAD, CLEAN, "cam_1", "clt_1", str(tmp_path),
                              confirm=True, dry_run=False)
-    assert out["ok"] and rec["names"]() == ["set_variables"]
+    assert out["ok"] and rec["names"]() == ["update_variable"]
     assert receipts.lookup(str(tmp_path), "cam_1", "https://lk/in/m")["stage"] == "varset"
+
+
+def test_load_lead_creates_variable_when_update_says_not_found(rec, tmp_path):
+    # PATCH échoue (variable custom encore sans définition) → POST de création en repli.
+    rec["resp"]["update_variable"] = (400, {"ok": False, "status": "Variables icebreaker not found"})
+    out = delivery.load_lead("KEY", LEAD, CLEAN, "cam_1", "clt_1", str(tmp_path),
+                             confirm=True, dry_run=False)
+    assert out["ok"]
+    assert rec["names"]() == ["upsert_contact", "add_to_list", "create_lead",
+                              "update_variable", "create_variable"]
+
+
+def test_load_lead_variables_non_notfound_error_does_not_create(rec, tmp_path):
+    # Une erreur PATCH qui n'est PAS 'not found' ne doit pas déclencher de POST de repli
+    # (sinon Lemlist crée une variable doublon suffixée, ex. 'followup 1').
+    rec["resp"]["update_variable"] = (500, {"ok": False, "status": "server error"})
+    out = delivery.load_lead("KEY", LEAD, CLEAN, "cam_1", "clt_1", str(tmp_path),
+                             confirm=True, dry_run=False)
+    assert out["ok"] is False and out["error"]["stage"] == "variables"
+    assert "create_variable" not in rec["names"]()
 
 
 def test_load_lead_rejects_broken_message_before_network(rec, tmp_path):
