@@ -49,4 +49,4 @@ AGPL-3.0-only — libre et ouvert, copyleft : toute redistribution ou usage en s
 
 ## Statut
 
-En construction, spec par spec (cf. `docs/specs/`). Ordre : moteur (`routine.py`) → W2 → W3 → icp-check → W1 → routeur.
+Briques v1 construites et testées (unitaires) : moteur (`routine.py`), W2 (setup Lemlist), W3 (sourcing), `icp-check`, W1 (`new-campaign`) et le routeur (`prospect-routine`). Reste : la validation en conditions réelles (run live sur une verticale) et les edits ciblés « modifier une campagne » (v1.5).
