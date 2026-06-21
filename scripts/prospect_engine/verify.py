@@ -35,6 +35,10 @@ def _extract_steps(res):
             return res["steps"]
         if "sequences" in res:
             return [st for seq in res["sequences"] for st in (seq.get("steps") or [])]
+        # Forme réelle de l'API : un dict de séquences keyées par id ({seq_id: {steps: […]}}).
+        seqs = [v for v in res.values() if isinstance(v, dict) and "steps" in v]
+        if seqs:
+            return [st for seq in seqs for st in (seq.get("steps") or [])]
     if isinstance(res, list):
         if res and isinstance(res[0], dict) and "steps" in res[0]:
             return [st for seq in res for st in (seq.get("steps") or [])]

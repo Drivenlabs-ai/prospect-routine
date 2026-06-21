@@ -67,3 +67,15 @@ def test_verify_extracts_steps_from_sequences_nesting(monkeypatch, tmp_path):
                         lambda k, c: (200, {"sequences": [{"steps": _steps("{{icebreaker}}")}]}))
     out = verify.verify("KEY", "cam_1", _prompts(tmp_path, ["icebreaker"]))
     assert out["aligned"] is True
+
+
+def test_verify_extracts_steps_from_dict_of_sequences(monkeypatch, tmp_path):
+    # Forme réelle de l'API : un dict de séquences keyées par id ({seq_id: {_id, steps:[...]}}),
+    # plusieurs séquences (invite sans message + séquence de messages).
+    monkeypatch.setattr(lemlist, "get_campaign_sequences", lambda k, c: (200, {
+        "seq_a": {"_id": "seq_a", "steps": [{"type": "linkedinInvite", "message": ""}]},
+        "seq_b": {"_id": "seq_b", "steps": _steps("{{icebreaker}}", "{{followup}}", "{{closing}}")},
+    }))
+    out = verify.verify("KEY", "cam_1", _prompts(tmp_path, ["icebreaker", "followup", "closing"]))
+    assert out["sequence_variables"] == ["closing", "followup", "icebreaker"]
+    assert out["aligned"] is True and out["orphan_prompts"] == []
