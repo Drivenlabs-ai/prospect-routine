@@ -1,7 +1,7 @@
 """État machine local — jamais dans le Drive.
 
 Deux fichiers dans `~/.claude/prospect-routine/<slug>/` :
-  state.json  : seen_lead_ids (fenêtre glissante bornée), history, last_run, page_cursor
+  state.json  : page_cursor (position dans le pool People DB), history, last_run
   status.json : phases de reprise des workflows (phase1_done, w2_steps, edit_in_progress, last_run)
 
 Toutes les écritures sont atomiques (tmp + os.replace) — jamais d'état corrompu sur crash.
@@ -11,26 +11,17 @@ import os
 import tempfile
 from pathlib import Path
 
-STATE_DEFAULT = {"seen_lead_ids": [], "page_cursor": 1, "last_run": None, "history": []}
+STATE_DEFAULT = {"page_cursor": 1, "last_run": None, "history": []}
 STATUS_DEFAULT = {"phase1_done": False, "w2_steps": [], "edit_in_progress": False, "last_run": None}
 
 
 # ---------- helpers purs ----------
 
-def merge_seen(seen, new):
-    """Union ordonnée, tout en string, sans doublon (premier vu conservé)."""
-    return list(dict.fromkeys([str(x) for x in list(seen) + list(new)]))
-
-
-def apply_commit(state, date, sourced, n_true, n_false, seen_cap=None):
-    """Enregistre un run : ajoute les sourcés aux déjà-vus (fenêtre glissante), append l'historique.
-
-    `seen_lead_ids` ne sert qu'à l'exclusion au sourcing ; la garantie « jamais deux fois » est
-    tenue par le ledger de reçus + le `deduplicate` natif Lemlist. On borne donc à une fenêtre."""
-    seen = merge_seen(state["seen_lead_ids"], sourced)
-    state["seen_lead_ids"] = seen[-seen_cap:] if seen_cap and len(seen) > seen_cap else seen
+def apply_commit(state, date, n_sourced, n_true, n_false):
+    """Append l'historique du run + horodate. Aucune mémoire de déjà-vus ici : l'exclusion au
+    sourcing se fait par le curseur de page + le filtre `out` (leads déjà en campagne)."""
     state["last_run"] = date
-    state["history"].append({"date": date, "sourced": len(sourced), "true": n_true, "false": n_false})
+    state["history"].append({"date": date, "sourced": n_sourced, "true": n_true, "false": n_false})
     return state
 
 
@@ -52,7 +43,7 @@ def _atomic_write(path, payload):
 def load_state(state_dir):
     p = Path(state_dir).expanduser() / "state.json"
     if not p.exists():
-        return dict(STATE_DEFAULT, seen_lead_ids=[], history=[])
+        return dict(STATE_DEFAULT, history=[])
     return json.loads(p.read_text(encoding="utf-8"))
 
 

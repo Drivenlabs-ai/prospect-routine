@@ -36,23 +36,30 @@ def test_cli_status_set_then_get(tmp_path):
     assert json.loads(r.stdout) == {"phase1_done": True}
 
 
-def test_cli_record_run_then_dedup_flags_seen(tmp_path):
+def test_cli_record_run_appends_history(tmp_path):
     cfg = _campaign(tmp_path)
     sourced = tmp_path / "sourced.json"
-    # forme réelle : le fichier candidats porte des dicts projetés (pas des ids nus)
     sourced.write_text(json.dumps([{"linkedinUrl": "https://lk/a", "fullName": "A B"}]))
-    r1 = run("record-run", "--config", cfg, "--date", "2026-06-15",
-             "--sourced-file", str(sourced), "--true", "1", "--false", "0")
-    assert r1.returncode == 0, r1.stderr
+    r = run("record-run", "--config", cfg, "--date", "2026-06-15",
+            "--sourced-file", str(sourced), "--true", "1", "--false", "0")
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout)["history_len"] == 1
 
+
+def test_cli_dedup_flags_already_loaded(tmp_path):
+    from prospect_engine import receipts
+    cfg = _campaign(tmp_path)
+    state_dir = json.loads(Path(cfg).read_text())["state_dir"]
+    receipts.append_receipt(state_dir, {"campaign_id": "cam_1", "lead_key": "https://lk/a",
+                                        "stage": "varset", "ok": True})
     leads = tmp_path / "leads.json"
     leads.write_text(json.dumps([{"linkedinUrl": "https://lk/a", "fullName": "A B"},
                                  {"linkedinUrl": "https://lk/b", "fullName": "C D"}]))
-    r2 = run("dedup-check", "--config", cfg, "--input", str(leads))
-    assert r2.returncode == 0, r2.stderr
-    out = json.loads(r2.stdout)
+    r = run("dedup-check", "--config", cfg, "--input", str(leads))
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
     assert [l["linkedinUrl"] for l in out["allowed"]] == ["https://lk/b"]
-    assert out["skipped"][0]["reason"] == "already_seen"
+    assert out["skipped"][0]["reason"] == "already_loaded"
 
 
 def test_cmd_source_wires_filters_and_cursor(monkeypatch, tmp_path, capsys):
