@@ -27,7 +27,7 @@ contient que le jugement IA.
 ```
 ROUTEUR (déterministe — moteur)
   1. resolve + prepare              → config, prompts (icpFit + messages), clés requises
-  2. source                         → candidats (People DB, filtres, hors déjà-vus, quota lu)
+  2. source                         → candidats (People DB, filtres, page au curseur, hors leads déjà en campagne, quota lu)
        ↓ args = {candidats, prompts}
   2'. WORKFLOW (agents)
        score    pipeline · 1 agent icpFit / candidat (Haiku, intelligence pure)   → qualifiés
@@ -39,7 +39,7 @@ ROUTEUR (déterministe — moteur)
                 (rejeté → 1 régénération → sinon écarté)
        ↓ rend {approuvés : lead + variables (+ contexte si enrich)}
   3. verify (contrat) → load-lead (en review)
-  4. record-run (déjà-vus, historique) + log
+  4. record-run (historique) + log
        ↓
      (après, hors run) revue humaine → launch
 ```
@@ -53,8 +53,9 @@ ROUTEUR (déterministe — moteur)
 | Élément | Détail |
 |---|---|
 | `lemlist.search_people(key, filters, page, size)` | wrapper brut |
-| `sourcing.source(key, filters, seen, target, *, max_pages)` | pagine, **exclut les déjà-vus** (linkedinUrl), s'arrête à `target` candidats / quota bas / pages épuisées ; **projette** chaque résultat vers la forme lead (`linkedinUrl, fullName, jobTitle, companyName…`) |
-| Sortie | `{candidats[], limitation, pages_used, exhausted}` |
+| `sourcing.source(key, filters, cursor, target, *, exclude=())` | lit **une page** du pool à la position `cursor` (ordre stable), **exclut les leads déjà en campagne** via le filtre natif `{filterId:"leadLinkedInUrl", in:[], out:[…]}` (+ filet client) ; **projette** chaque résultat vers la forme lead (`linkedinUrl, fullName, jobTitle, companyName…`) ; le curseur avance d'une page |
+| `sourcing.loaded_urls(contacts, campaign_id, cap=900)` · `lemlist.get_contacts(key)` | set des `linkedinUrl` déjà en campagne (borné sous le plafond `out` ~1000), depuis les contacts Lemlist ; `get_contacts` → `None` sur échec → sourcing dégradé sans exclusion, avec avertissement |
+| Sortie | `{candidats[], limitation, next_cursor, exhausted}` |
 
 Les **filtres** vivent dans `campaign.json` (config de sourcing = intelligence locale, pas structure
 de campagne). Lecture du `limitation` = respect du quota natif (pas de throttle custom).
@@ -154,13 +155,14 @@ minimalement câblée ; le câblage fin (résolution slug, dry-run, enchaînemen
 ## 6. État & contrat (réutilise specs 1–2)
 
 `verify` pré-load (contrat clés↔séquence) · `load-lead` idempotent (reçus) · `record-run`
-(déjà-vus glissants, historique) · garde launch (après). Un candidat sourcé entre dans `seen` au
-`record-run` même s'il est écarté au score (évite de le re-scorer — gratuit mais inutile).
+(historique + horodatage) · garde launch (après). Le non-re-score des écartés est assuré par le
+**curseur de page** (on ne repasse pas sur une page déjà lue), pas par une mémoire `seen`. Modèle
+détaillé : `docs/superpowers/specs/2026-06-22-sourcing-state-cursor-design.md`.
 
 ## 7. Tests
 
-- Engine `source` : pagination, exclusion des déjà-vus, arrêt à `target` / quota bas / épuisement,
-  projection des résultats (mock `search_people`).
+- Engine `source` : page au curseur (`next_cursor`), exclusion via filtre `out` (leads en campagne),
+  fin de pool (`exhausted`), projection des résultats (mock `search_people`).
 - `lemlist.search_people` : route `POST /database/people`, body filtres/pagination.
 - Workflow : testé via ses parties déterministes (filtrage `drafts`, `split` approuvés/rejetés,
   interpolation des prompts) + un run mocké de `runSourcing` (agents `pipeline`/`parallel` injectés,

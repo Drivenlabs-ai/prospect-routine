@@ -77,9 +77,9 @@ Drivenlabs Team/Drivenlabs/Prospection/             # intelligence métier (SoT,
     # (pas de dataset : icp-check teste l'icpFit sur un échantillon live au setup, cf. spec 04)
 
 ~/.claude/prospect-routine/<slug>/                   # état machine (jamais Drive)
-├── state.json        (seen_lead_ids, history)
+├── state.json        (page_cursor, history)
 ├── status.json       (machine d'état / reprise)
-├── receipts/push-<date>.json   (idempotence push)
+├── receipts.jsonl    (ledger reçus, idempotence)
 └── log.md
 ```
 
