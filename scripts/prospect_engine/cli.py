@@ -22,14 +22,11 @@ def _key(a):
 
 def cmd_prepare(a):
     cfg, prompts = config.load_config(a.config)
-    st = state.load_state(cfg["state_dir"])
     key = config.read_key(cfg["api_key_file"])
     code, _ = lemlist.get_team(key)
     if code != 200:
         raise SystemExit(f"STOP: GET /team → {code} (auth/API KO)")
-    inline = cfg.get("seen_ids_inline_max", 3000)
-    _emit({"date": a.date, "config": cfg, "seenIds": st["seen_lead_ids"][-inline:],
-           "prompts": prompts, "dry_run": cfg.get("dry_run", True)})
+    _emit({"date": a.date, "config": cfg, "prompts": prompts, "dry_run": cfg.get("dry_run", True)})
 
 
 def cmd_resolve(a):
@@ -48,8 +45,7 @@ def cmd_dedup_check(a):
     cfg = config.load_cfg_only(a.config)
     leads = json.loads(Path(a.input).read_text(encoding="utf-8"))
     ledger = receipts.read_ledger(cfg["state_dir"])
-    seen = set(state.load_state(cfg["state_dir"])["seen_lead_ids"])
-    _emit(dedup.dedup_check(leads, ledger, cfg["campaign_id"], seen))
+    _emit(dedup.dedup_check(leads, ledger, cfg["campaign_id"]))
 
 
 def cmd_load_lead(a):
@@ -128,14 +124,9 @@ def cmd_register_campaign(a):
 def cmd_record_run(a):
     cfg = config.load_cfg_only(a.config)
     sourced = json.loads(Path(a.sourced_file).read_text(encoding="utf-8"))
-    # Le fichier candidats porte des dicts projetés ; `seen` n'indexe que la clé de dédup du
-    # sourcing (linkedinUrl). Extraire cette clé (tolère un fichier déjà réduit à des ids nus).
-    keys = [c.get("linkedinUrl") if isinstance(c, dict) else c for c in sourced]
-    keys = [k for k in keys if k]
-    st = state.apply_commit(state.load_state(cfg["state_dir"]), a.date, keys, a.true, a.false,
-                            seen_cap=cfg.get("seen_ids_inline_max", 3000))
+    st = state.apply_commit(state.load_state(cfg["state_dir"]), a.date, len(sourced), a.true, a.false)
     state.save_state(cfg["state_dir"], st)
-    _emit({"seen_total": len(st["seen_lead_ids"]), "added": len(keys)})
+    _emit({"recorded": a.date, "history_len": len(st["history"])})
 
 
 def cmd_status(a):

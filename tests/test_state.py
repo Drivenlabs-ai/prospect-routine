@@ -1,38 +1,29 @@
-"""État machine : déjà-vus (fenêtre glissante), historique, status de reprise — écritures atomiques."""
+"""État machine : curseur de page, historique, status de reprise — écritures atomiques."""
 from prospect_engine import state
 
 
-def test_merge_seen_dedups_and_stringifies():
-    assert state.merge_seen([1, 2], [2, 3, "3"]) == ["1", "2", "3"]
-
-
-def test_merge_seen_preserves_first_seen_order():
-    assert state.merge_seen(["b", "a"], ["a", "c"]) == ["b", "a", "c"]
-
-
 def test_apply_commit_appends_history_entry():
-    st = {"seen_lead_ids": [], "page_cursor": 1, "last_run": None, "history": []}
-    state.apply_commit(st, "2026-06-15", ["x", "y"], 1, 1)
+    st = {"page_cursor": 1, "last_run": None, "history": []}
+    state.apply_commit(st, "2026-06-15", 2, 1, 1)
     assert st["last_run"] == "2026-06-15"
     assert st["history"][-1] == {"date": "2026-06-15", "sourced": 2, "true": 1, "false": 1}
-    assert st["seen_lead_ids"] == ["x", "y"]
 
 
-def test_apply_commit_sliding_window_caps_seen():
-    st = {"seen_lead_ids": ["a", "b", "c"], "page_cursor": 1, "last_run": None, "history": []}
-    state.apply_commit(st, "2026-06-15", ["d", "e"], 0, 0, seen_cap=3)
-    assert st["seen_lead_ids"] == ["c", "d", "e"]
+def test_apply_commit_does_not_track_seen():
+    st = {"page_cursor": 1, "last_run": None, "history": []}
+    state.apply_commit(st, "2026-06-15", 3, 0, 0)
+    assert "seen_lead_ids" not in st
 
 
 def test_save_load_state_roundtrip(tmp_path):
-    st = {"seen_lead_ids": ["x"], "page_cursor": 2, "last_run": "2026-06-15", "history": []}
+    st = {"page_cursor": 2, "last_run": "2026-06-15", "history": []}
     state.save_state(str(tmp_path), st)
     assert state.load_state(str(tmp_path)) == st
 
 
 def test_load_state_default_when_absent(tmp_path):
     st = state.load_state(str(tmp_path / "nope"))
-    assert st == {"seen_lead_ids": [], "page_cursor": 1, "last_run": None, "history": []}
+    assert st == {"page_cursor": 1, "last_run": None, "history": []}
 
 
 def test_status_set_get_roundtrip(tmp_path):

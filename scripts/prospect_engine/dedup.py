@@ -8,13 +8,12 @@ a déjà chargés dans cette campagne, déjà vus récemment, ou sans identifian
 from prospect_engine.receipts import lead_key
 
 
-def dedup_check(leads, ledger, campaign_id, seen):
-    """Partitionne `leads` en {allowed, skipped[{lead, reason}]}.
+def dedup_check(leads, ledger, campaign_id):
+    """Partitionne `leads` en {allowed, skipped[{lead, reason}]} contre le ledger de reçus
+    (déjà chargés dans cette campagne) et l'absence d'identifiant.
 
     ledger : dict (campaign_id, lead_key) -> reçu (cf. receipts.read_ledger).
-    seen   : itérable de lead_keys déjà vus au sourcing (state.seen_lead_ids).
     """
-    seen = set(seen)
     allowed, skipped = [], []
     for lead in leads:
         key = lead_key(lead)
@@ -22,8 +21,6 @@ def dedup_check(leads, ledger, campaign_id, seen):
             skipped.append({"lead": lead, "reason": "no_identifier"})
         elif (campaign_id, key) in ledger:
             skipped.append({"lead": lead, "reason": "already_loaded"})
-        elif key in seen:
-            skipped.append({"lead": lead, "reason": "already_seen"})
         else:
             allowed.append(lead)
     return {"allowed": allowed, "skipped": skipped}

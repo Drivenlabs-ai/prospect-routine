@@ -7,30 +7,25 @@ def _lead(url):
 
 
 def test_allows_fresh_lead():
-    out = dedup.dedup_check([_lead("https://lk/a")], ledger={}, campaign_id="cam_1", seen=set())
+    out = dedup.dedup_check([_lead("https://lk/a")], ledger={}, campaign_id="cam_1")
     assert [l["linkedinUrl"] for l in out["allowed"]] == ["https://lk/a"]
     assert out["skipped"] == []
 
 
-def test_skips_already_loaded_in_this_campaign():
-    ledger = {("cam_1", "https://lk/a"): {"stage": "varset"}}
-    out = dedup.dedup_check([_lead("https://lk/a")], ledger=ledger, campaign_id="cam_1", seen=set())
-    assert out["allowed"] == []
-    assert out["skipped"][0]["reason"] == "already_loaded"
-
-
 def test_does_not_skip_when_loaded_in_other_campaign():
     ledger = {("cam_2", "https://lk/a"): {"stage": "varset"}}
-    out = dedup.dedup_check([_lead("https://lk/a")], ledger=ledger, campaign_id="cam_1", seen=set())
+    out = dedup.dedup_check([_lead("https://lk/a")], ledger=ledger, campaign_id="cam_1")
     assert len(out["allowed"]) == 1
 
 
-def test_skips_already_seen():
-    out = dedup.dedup_check([_lead("https://lk/a")], ledger={}, campaign_id="cam_1", seen={"https://lk/a"})
-    assert out["skipped"][0]["reason"] == "already_seen"
+def test_dedup_check_flags_already_loaded():
+    leads = [{"linkedinUrl": "https://lk/a"}, {"linkedinUrl": "https://lk/b"}]
+    ledger = {("cam_1", "https://lk/a"): {"stage": "varset"}}
+    out = dedup.dedup_check(leads, ledger, "cam_1")
+    assert [l["linkedinUrl"] for l in out["allowed"]] == ["https://lk/b"]
+    assert out["skipped"][0]["reason"] == "already_loaded"
 
 
-def test_skips_lead_without_identifier():
-    out = dedup.dedup_check([{"fullName": "No Id"}], ledger={}, campaign_id="cam_1", seen=set())
-    assert out["allowed"] == []
-    assert out["skipped"][0]["reason"] == "no_identifier"
+def test_dedup_check_flags_no_identifier():
+    out = dedup.dedup_check([{"fullName": "Sans URL"}], {}, "cam_1")
+    assert out["allowed"] == [] and out["skipped"][0]["reason"] == "no_identifier"
