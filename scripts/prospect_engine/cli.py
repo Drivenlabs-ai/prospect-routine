@@ -6,7 +6,7 @@ import sys
 import time
 from pathlib import Path
 
-from prospect_engine import config, delivery, dedup, lemlist, receipts, sourcing, state, verify
+from prospect_engine import config, delivery, dedup, lemlist, receipts, sequence, sourcing, state, verify
 
 DEFAULT_KEY = "~/.claude/linkedin-prospect.local.md"
 
@@ -93,6 +93,57 @@ def cmd_source(a):
     st["page_cursor"] = out["next_cursor"]
     state.save_state(cfg["state_dir"], st)
     _emit(out)
+
+
+def _editable_or_stop(key, campaign_id):
+    """Lit l'état de la campagne et applique le gate dur. STOP si elle tourne (ou état illisible)."""
+    _, camp = lemlist.get_campaign(key, campaign_id)
+    try:
+        sequence.ensure_editable(camp if isinstance(camp, dict) else {})
+    except sequence.CampaignActive as e:
+        raise SystemExit(f"STOP: {e}")
+
+
+def cmd_sequence(a):
+    cfg = config.load_cfg_only(a.config)
+    key = config.read_key(cfg["api_key_file"])
+    _, res = lemlist.get_campaign_sequences(key, cfg["campaign_id"])
+    _emit({"steps": sequence.summarize(res)})
+
+
+def cmd_add_step(a):
+    cfg = config.load_cfg_only(a.config)
+    key = config.read_key(cfg["api_key_file"])
+    _editable_or_stop(key, cfg["campaign_id"])
+    body = json.loads(Path(a.input).read_text(encoding="utf-8"))
+    st, res = lemlist.add_step(key, a.sequence_id, body)
+    _emit({"status": st, "result": res})
+
+
+def cmd_update_step(a):
+    cfg = config.load_cfg_only(a.config)
+    key = config.read_key(cfg["api_key_file"])
+    _editable_or_stop(key, cfg["campaign_id"])
+    body = json.loads(Path(a.input).read_text(encoding="utf-8"))
+    st, res = lemlist.update_step(key, a.sequence_id, a.step_id, body)
+    _emit({"status": st, "result": res})
+
+
+def cmd_delete_step(a):
+    cfg = config.load_cfg_only(a.config)
+    key = config.read_key(cfg["api_key_file"])
+    _editable_or_stop(key, cfg["campaign_id"])
+    st, res = lemlist.delete_step(key, a.sequence_id, a.step_id)
+    _emit({"status": st, "result": res})
+
+
+def cmd_edit_schedule(a):
+    cfg = config.load_cfg_only(a.config)
+    key = config.read_key(cfg["api_key_file"])
+    _editable_or_stop(key, cfg["campaign_id"])
+    body = json.loads(Path(a.input).read_text(encoding="utf-8"))
+    st, res = lemlist.update_schedule(key, a.schedule_id, body)
+    _emit({"status": st, "result": res})
 
 
 def cmd_cursor(a):
@@ -185,6 +236,11 @@ def build_parser():
     p = sub.add_parser("fetch"); p.add_argument("--config", required=True); p.set_defaults(fn=cmd_fetch)
     p = sub.add_parser("dedup-check"); p.add_argument("--config", required=True); p.add_argument("--input", required=True); p.set_defaults(fn=cmd_dedup_check)
     p = sub.add_parser("source"); p.add_argument("--config", required=True); p.add_argument("--target", type=int, default=None); p.set_defaults(fn=cmd_source)
+    p = sub.add_parser("sequence"); p.add_argument("--config", required=True); p.set_defaults(fn=cmd_sequence)
+    p = sub.add_parser("add-step"); p.add_argument("--config", required=True); p.add_argument("--sequence-id", required=True, dest="sequence_id"); p.add_argument("--input", required=True); p.set_defaults(fn=cmd_add_step)
+    p = sub.add_parser("update-step"); p.add_argument("--config", required=True); p.add_argument("--sequence-id", required=True, dest="sequence_id"); p.add_argument("--step-id", required=True, dest="step_id"); p.add_argument("--input", required=True); p.set_defaults(fn=cmd_update_step)
+    p = sub.add_parser("delete-step"); p.add_argument("--config", required=True); p.add_argument("--sequence-id", required=True, dest="sequence_id"); p.add_argument("--step-id", required=True, dest="step_id"); p.set_defaults(fn=cmd_delete_step)
+    p = sub.add_parser("edit-schedule"); p.add_argument("--config", required=True); p.add_argument("--schedule-id", required=True, dest="schedule_id"); p.add_argument("--input", required=True); p.set_defaults(fn=cmd_edit_schedule)
     p = sub.add_parser("cursor"); p.add_argument("--config", required=True); p.add_argument("--reset", action="store_true"); p.add_argument("--set", type=int, default=None, dest="set"); p.set_defaults(fn=cmd_cursor)
     p = sub.add_parser("load-lead"); p.add_argument("--config", required=True); p.add_argument("--input", required=True); p.add_argument("--confirm", action="store_true"); p.set_defaults(fn=cmd_load_lead)
     p = sub.add_parser("launch"); p.add_argument("--config", required=True); p.add_argument("--input", required=True); p.add_argument("--confirm", action="store_true"); p.set_defaults(fn=cmd_launch)

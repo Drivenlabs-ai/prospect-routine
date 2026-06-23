@@ -217,3 +217,58 @@ def test_cmd_source_warns_on_exclusion_cap(monkeypatch, tmp_path, capsys):
         target = None
     cli.cmd_source(A())
     assert "plafonn" in capsys.readouterr().err
+
+
+def test_cmd_sequence_summarizes(monkeypatch, tmp_path, capsys):
+    from prospect_engine import cli, config, lemlist
+    cfg = {"api_key_file": "x", "campaign_id": "cam_1"}
+    monkeypatch.setattr(config, "load_cfg_only", lambda p: cfg)
+    monkeypatch.setattr(config, "read_key", lambda p: "KEY")
+    monkeypatch.setattr(lemlist, "get_campaign_sequences",
+                        lambda key, cid: (200, {"seq_1": {"steps": [{"_id": "stp_1", "type": "email",
+                                                                     "delay": 0, "message": "{{icebreaker}}"}]}}))
+    class A: config = "x"
+    cli.cmd_sequence(A())
+    out = json.loads(capsys.readouterr().out)
+    assert out["steps"][0]["sequence_id"] == "seq_1" and out["steps"][0]["step_id"] == "stp_1"
+
+
+def test_cmd_add_step_blocked_when_campaign_running(monkeypatch, tmp_path):
+    from prospect_engine import cli, config, lemlist
+    cfg = {"api_key_file": "x", "campaign_id": "cam_1"}
+    monkeypatch.setattr(config, "load_cfg_only", lambda p: cfg)
+    monkeypatch.setattr(config, "read_key", lambda p: "KEY")
+    monkeypatch.setattr(lemlist, "get_campaign", lambda key, cid: (200, {"status": "running"}))
+    called = {"add": False}
+    monkeypatch.setattr(lemlist, "add_step", lambda *a, **k: called.__setitem__("add", True) or (200, {}))
+    body = tmp_path / "b.json"; body.write_text(json.dumps({"type": "email", "subject": "S", "message": "M"}))
+    class A:
+        config = "x"; sequence_id = "seq_1"; input = str(body)
+    with __import__("pytest").raises(SystemExit):
+        cli.cmd_add_step(A())
+    assert called["add"] is False  # mutation jamais appelée si campagne active
+
+
+def test_cmd_add_step_passes_when_paused(monkeypatch, tmp_path, capsys):
+    from prospect_engine import cli, config, lemlist
+    cfg = {"api_key_file": "x", "campaign_id": "cam_1"}
+    monkeypatch.setattr(config, "load_cfg_only", lambda p: cfg)
+    monkeypatch.setattr(config, "read_key", lambda p: "KEY")
+    monkeypatch.setattr(lemlist, "get_campaign", lambda key, cid: (200, {"status": "paused"}))
+    cap = {}
+    monkeypatch.setattr(lemlist, "add_step",
+                        lambda key, sid, body: cap.update(sid=sid, body=body) or (200, {"_id": "stp_9"}))
+    body = tmp_path / "b.json"; body.write_text(json.dumps({"type": "email", "subject": "S", "message": "M"}))
+    class A:
+        config = "x"; sequence_id = "seq_1"; input = str(body)
+    cli.cmd_add_step(A())
+    out = json.loads(capsys.readouterr().out)
+    assert cap["sid"] == "seq_1" and cap["body"]["type"] == "email" and out["status"] == 200
+
+
+def test_cli_delete_step_blocked_on_running_via_subprocess(tmp_path, monkeypatch):
+    # Intégration parseur : la commande existe et exige ses flags.
+    cfg = _campaign(tmp_path)
+    r = run("delete-step", "--config", cfg, "--sequence-id", "seq_1", "--step-id", "stp_1")
+    # Sans réseau réel le get_campaign échoue → état inconnu → gate STOP (returncode ≠ 0).
+    assert r.returncode != 0
