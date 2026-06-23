@@ -33,7 +33,8 @@ Le ciblage a deux leviers, tous deux locaux (le moteur les lit à chaque run ; L
 1. resolve     resolve --registry <Prospection/campaigns-registry.json> --slug <ce que dit l'utilisateur>
                 → campaign_id + config_path. Slug introuvable → demander lequel (le registre les liste).
 2. lire        l'état actuel : filters (campaign.json) + prompts/icpFit.md + fichiers d'intelligence
-                (icp.md, persona.md, triggers.md) pour le contexte.
+                (icp.md, persona.md, triggers.md) pour le contexte. Vérifier edit_in_progress (status) :
+                si true, une édition est restée inachevée — le signaler et repartir proprement.
 3. comprendre  reformuler l'intention jusqu'à être sûr de ce qui change dans le ciblage.
 4. traduire    nouveaux filtres People DB (craft /lemlist §3 ; valider filterId/valeurs via
                 get-database-filters) et/ou icpFit ajusté. Ne rien écrire encore.
@@ -42,6 +43,7 @@ Le ciblage a deux leviers, tous deux locaux (le moteur les lit à chaque run ; L
                   total 0 ou exhausted → filtre trop étroit ou invalide : corriger, ne pas committer.
                 workflow icp-check : args = { prompt_icpFit: <icpFit ajusté>, sample: <candidats>,
                   model: "haiku" } → lire les verdicts, comparer à l'ICP visé, itérer. Boucle bornée, accord humain.
+                abandon à ce stade → status --config <config_path> --set edit_in_progress=false (rien n'a été écrit)
 6. committer   après accord explicite : écrire les nouveaux filters (campaign.json) + le nouvel icpFit.md.
                 filtres changés → cursor --config <config_path> --reset (cf. Règle du curseur pour le pourquoi)
                 icpFit seul modifié → pas de reset (le pool est inchangé)
