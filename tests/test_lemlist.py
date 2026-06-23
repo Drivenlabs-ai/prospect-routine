@@ -172,3 +172,43 @@ def test_get_contacts_paginates_on_success(monkeypatch):
         return (200, {"data": [{"linkedinUrl": "https://lk/a"}]})  # page (<100 → stop)
     monkeypatch.setattr(lemlist, "api_call", fake)
     assert lemlist.get_contacts("KEY") == [{"linkedinUrl": "https://lk/a"}]
+
+
+def test_add_step_route_method_body(monkeypatch):
+    cap = {}
+    def fake(method, route, key, body=None, **kw):
+        cap.update(method=method, route=route, body=body); return 200, {"_id": "stp_1"}
+    monkeypatch.setattr(lemlist, "api_call", fake)
+    lemlist.add_step("KEY", "seq_1", {"type": "email", "subject": "S", "message": "M"})
+    assert cap["method"] == "POST" and cap["route"] == "/sequences/seq_1/steps"
+    assert cap["body"] == {"type": "email", "subject": "S", "message": "M"}
+
+
+def test_update_step_route_method_body(monkeypatch):
+    cap = {}
+    def fake(method, route, key, body=None, **kw):
+        cap.update(method=method, route=route, body=body); return 200, {}
+    monkeypatch.setattr(lemlist, "api_call", fake)
+    lemlist.update_step("KEY", "seq_1", "stp_9", {"type": "email", "message": "M2"})
+    assert cap["method"] == "PATCH" and cap["route"] == "/sequences/seq_1/steps/stp_9"
+    assert cap["body"] == {"type": "email", "message": "M2"}
+
+
+def test_delete_step_route_method_no_body(monkeypatch):
+    cap = {}
+    def fake(method, route, key, body=None, **kw):
+        cap.update(method=method, route=route, body=body); return 200, {"ok": True}
+    monkeypatch.setattr(lemlist, "api_call", fake)
+    lemlist.delete_step("KEY", "seq_1", "stp_9")
+    assert cap["method"] == "DELETE" and cap["route"] == "/sequences/seq_1/steps/stp_9"
+    assert cap["body"] is None
+
+
+def test_update_schedule_route_method_body(monkeypatch):
+    cap = {}
+    def fake(method, route, key, body=None, **kw):
+        cap.update(method=method, route=route, body=body); return 200, {}
+    monkeypatch.setattr(lemlist, "api_call", fake)
+    lemlist.update_schedule("KEY", "skd_1", {"start": "09:00", "end": "17:00"})
+    assert cap["method"] == "PATCH" and cap["route"] == "/schedules/skd_1"
+    assert cap["body"] == {"start": "09:00", "end": "17:00"}

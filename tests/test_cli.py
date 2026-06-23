@@ -217,3 +217,97 @@ def test_cmd_source_warns_on_exclusion_cap(monkeypatch, tmp_path, capsys):
         target = None
     cli.cmd_source(A())
     assert "plafonn" in capsys.readouterr().err
+
+
+def test_cmd_sequence_summarizes(monkeypatch, tmp_path, capsys):
+    from prospect_engine import cli, config, lemlist
+    cfg = {"api_key_file": "x", "campaign_id": "cam_1"}
+    monkeypatch.setattr(config, "load_cfg_only", lambda p: cfg)
+    monkeypatch.setattr(config, "read_key", lambda p: "KEY")
+    monkeypatch.setattr(lemlist, "get_campaign_sequences",
+                        lambda key, cid: (200, {"seq_1": {"steps": [{"_id": "stp_1", "type": "email",
+                                                                     "delay": 0, "message": "{{icebreaker}}"}]}}))
+    class A: config = "x"
+    cli.cmd_sequence(A())
+    out = json.loads(capsys.readouterr().out)
+    assert out["steps"][0]["sequence_id"] == "seq_1" and out["steps"][0]["step_id"] == "stp_1"
+
+
+def test_cmd_add_step_blocked_when_campaign_running(monkeypatch, tmp_path):
+    from prospect_engine import cli, config, lemlist
+    cfg = {"api_key_file": "x", "campaign_id": "cam_1"}
+    monkeypatch.setattr(config, "load_cfg_only", lambda p: cfg)
+    monkeypatch.setattr(config, "read_key", lambda p: "KEY")
+    monkeypatch.setattr(lemlist, "get_campaign", lambda key, cid: (200, {"status": "running"}))
+    called = {"add": False}
+    monkeypatch.setattr(lemlist, "add_step", lambda *a, **k: called.__setitem__("add", True) or (200, {}))
+    body = tmp_path / "b.json"; body.write_text(json.dumps({"type": "email", "subject": "S", "message": "M"}))
+    class A:
+        config = "x"; sequence_id = "seq_1"; input = str(body)
+    with __import__("pytest").raises(SystemExit):
+        cli.cmd_add_step(A())
+    assert called["add"] is False  # mutation jamais appelée si campagne active
+
+
+def test_cmd_add_step_passes_when_paused(monkeypatch, tmp_path, capsys):
+    from prospect_engine import cli, config, lemlist
+    cfg = {"api_key_file": "x", "campaign_id": "cam_1"}
+    monkeypatch.setattr(config, "load_cfg_only", lambda p: cfg)
+    monkeypatch.setattr(config, "read_key", lambda p: "KEY")
+    monkeypatch.setattr(lemlist, "get_campaign", lambda key, cid: (200, {"status": "paused"}))
+    cap = {}
+    monkeypatch.setattr(lemlist, "add_step",
+                        lambda key, sid, body: cap.update(sid=sid, body=body) or (200, {"_id": "stp_9"}))
+    body = tmp_path / "b.json"; body.write_text(json.dumps({"type": "email", "subject": "S", "message": "M"}))
+    class A:
+        config = "x"; sequence_id = "seq_1"; input = str(body)
+    cli.cmd_add_step(A())
+    out = json.loads(capsys.readouterr().out)
+    assert cap["sid"] == "seq_1" and cap["body"]["type"] == "email" and out["status"] == 200
+
+
+def test_cmd_delete_step_blocked_when_campaign_running(monkeypatch):
+    from prospect_engine import cli, config, lemlist
+    cfg = {"api_key_file": "x", "campaign_id": "cam_1"}
+    monkeypatch.setattr(config, "load_cfg_only", lambda p: cfg)
+    monkeypatch.setattr(config, "read_key", lambda p: "KEY")
+    monkeypatch.setattr(lemlist, "get_campaign", lambda key, cid: (200, {"status": "running"}))
+    called = {"del": False}
+    monkeypatch.setattr(lemlist, "delete_step", lambda *a, **k: called.__setitem__("del", True) or (200, {}))
+    class A:
+        config = "x"; sequence_id = "seq_1"; step_id = "stp_1"
+    with __import__("pytest").raises(SystemExit):
+        cli.cmd_delete_step(A())
+    assert called["del"] is False  # mutation jamais appelée si campagne active
+
+
+def test_cmd_update_step_blocked_when_campaign_running(monkeypatch, tmp_path):
+    from prospect_engine import cli, config, lemlist
+    cfg = {"api_key_file": "x", "campaign_id": "cam_1"}
+    monkeypatch.setattr(config, "load_cfg_only", lambda p: cfg)
+    monkeypatch.setattr(config, "read_key", lambda p: "KEY")
+    monkeypatch.setattr(lemlist, "get_campaign", lambda key, cid: (200, {"status": "running"}))
+    called = {"upd": False}
+    monkeypatch.setattr(lemlist, "update_step", lambda *a, **k: called.__setitem__("upd", True) or (200, {}))
+    body = tmp_path / "b.json"; body.write_text(json.dumps({"type": "email", "message": "M"}))
+    class A:
+        config = "x"; sequence_id = "seq_1"; step_id = "stp_1"; input = str(body)
+    with __import__("pytest").raises(SystemExit):
+        cli.cmd_update_step(A())
+    assert called["upd"] is False
+
+
+def test_cmd_edit_schedule_blocked_when_campaign_running(monkeypatch, tmp_path):
+    from prospect_engine import cli, config, lemlist
+    cfg = {"api_key_file": "x", "campaign_id": "cam_1"}
+    monkeypatch.setattr(config, "load_cfg_only", lambda p: cfg)
+    monkeypatch.setattr(config, "read_key", lambda p: "KEY")
+    monkeypatch.setattr(lemlist, "get_campaign", lambda key, cid: (200, {"status": "running"}))
+    called = {"sched": False}
+    monkeypatch.setattr(lemlist, "update_schedule", lambda *a, **k: called.__setitem__("sched", True) or (200, {}))
+    body = tmp_path / "b.json"; body.write_text(json.dumps({"start": "09:00"}))
+    class A:
+        config = "x"; schedule_id = "skd_1"; input = str(body)
+    with __import__("pytest").raises(SystemExit):
+        cli.cmd_edit_schedule(A())
+    assert called["sched"] is False

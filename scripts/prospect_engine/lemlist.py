@@ -132,6 +132,28 @@ def get_campaign_sequences(key, campaign_id):
     return api_call("GET", f"/campaigns/{campaign_id}/sequences", key)
 
 
+def add_step(key, sequence_id, body):
+    """Ajoute une étape à une séquence. `body` porte `type` (requis) + champs selon le type
+    (cf. doc live `/lemlist`). Pass-through : aucun schéma hardcodé ici."""
+    return api_call("POST", f"/sequences/{sequence_id}/steps", key, body)
+
+
+def update_step(key, sequence_id, step_id, body):
+    """Édite une étape (subject/message/delay…). `type` figure dans `body` mais reste immuable côté
+    Lemlist (changer de canal = delete + recreate)."""
+    return api_call("PATCH", f"/sequences/{sequence_id}/steps/{step_id}", key, body)
+
+
+def delete_step(key, sequence_id, step_id):
+    """Supprime une étape. Lemlist refuse (400) si la campagne tourne — le gate l'attrape avant l'appel."""
+    return api_call("DELETE", f"/sequences/{sequence_id}/steps/{step_id}", key)
+
+
+def update_schedule(key, schedule_id, body):
+    """Édite une fenêtre d'envoi (start/end/weekdays/timezone/secondsToWait — cf. doc live `/lemlist`)."""
+    return api_call("PATCH", f"/schedules/{schedule_id}", key, body)
+
+
 def get_lead(key, lead_id):
     """Lit un lead par id (renvoie ses `variables`) — fonctionne sans email, pour la garde launch."""
     return api_call("GET", f"/leads?id={lead_id}", key)
