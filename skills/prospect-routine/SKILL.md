@@ -9,57 +9,73 @@ description: Déclencher quand l'utilisateur veut faire tourner la prospection o
 
 Porte d'entrée du pipeline outbound. Lit l'intention de l'utilisateur, résout de quelle campagne il
 parle, et passe la main à la bonne brique. Aucun travail métier ici — le routeur aiguille, les briques
-font. Le run quotidien est sa vraie valeur ; créer et modifier sont délégués.
+font. Le run quotidien est sa vraie valeur ; créer et modifier sont délégués à leurs skills.
+
+## Les briques (la frontière)
+
+Trois types d'outils, frontière nette entre déterministe et jugement IA :
+
+- **Moteur** — `uv run python scripts/routine.py <cmd>`. I/O déterministe, zéro LLM : **le moteur est le
+  seul point d'accès à Lemlist et à l'état machine**. Chaque commande lit ses fichiers, appelle l'API,
+  imprime du JSON. La surface complète des commandes et de leurs flags est documentée là où elles servent
+  (run → `run.md` ; création / édition → les skills `new-campaign` / `edit-campaign`).
+- **Workflows** — `/sourcing`, `/icp-check`. Fan-out d'agents IA : le jugement (scoring, rédaction,
+  qualification). Invoqués par le routeur et les skills ; ils ne font aucune I/O Lemlist eux-mêmes.
+- **Skills** — `new-campaign`, `edit-campaign`. Orchestration d'une intention complète : ils enchaînent
+  moteur + workflows et portent les gardes. Ce routeur en est un.
+
+Ne jamais muter Lemlist à la main : passer par le moteur, via la brique de l'intention.
 
 ## Trois intentions
 
 | L'utilisateur veut… | Destination |
 |---|---|
 | faire tourner le sourcing du jour | Run quotidien (ci-dessous) |
-| créer une campagne de zéro | skill `new-campaign` (il se déclenche seul ; sinon, l'y pointer) |
-| modifier le ciblage d'une campagne | skill `edit-campaign` (filtres + icpFit ; il se déclenche seul) |
+| créer une campagne de zéro | skill `new-campaign` |
+| modifier le ciblage d'une campagne | skill `edit-campaign` (filtres People DB + prompt icpFit) |
 | modifier la séquence / la config / dupliquer | pas encore couvert — le dire, ne rien muter à la main |
 
+`new-campaign` et `edit-campaign` se déclenchent seuls sur leur intention ; s'ils ne l'ont pas fait, l'y
+renvoyer. Demande sans action précisée (« occupe-toi de la prospection X ») → proposer le run du jour, la
+valeur par défaut.
+
 Avant un run, résoudre la campagne : `resolve --registry <racine Prospection/campaigns-registry.json>
---slug <ce que dit l'utilisateur>` → `campaign_id` + `config_path`. Slug introuvable → demander lequel
-(le registre liste les campagnes).
-
-Demande de prospection sans action précisée (« occupe-toi de la prospection X ») → proposer le run du
-jour, la valeur par défaut.
-
-Commandes moteur : via `uv run python scripts/routine.py <cmd>`.
+--slug <ce que dit l'utilisateur>` → `campaign_id` + `config_path`. Slug introuvable → demander lequel (le
+registre liste les campagnes).
 
 ## Run quotidien
 
-Charge des leads **en review** pour une campagne ; ne lance rien (le launch est une étape séparée et
-gardée — cf. Référence). Pipeline en ordre fixe, chaque étape nourrit la suivante :
+Charge des leads en review pour une campagne ; ne lance rien (le launch est une étape séparée et gardée).
+Pipeline en ordre fixe, chaque étape nourrit la suivante :
 
-1. `prepare --config <config_path> --date <date>` → config + prompts + pré-vol auth (STOP si auth ou
-   prompt KO : rien ne sert de sourcer sans pouvoir charger).
-2. `source --config <config_path>` → candidats inédits (déjà-vus exclus, quota People DB lu).
-3. `verify --config <config_path>` → clés de message requises + garde du contrat clés ↔ séquence.
+1. `prepare` → config + prompts + pré-vol auth (STOP si auth ou prompt KO).
+2. `source` → candidats inédits (curseur de page, exclusion « déjà en campagne », quota People DB).
+3. `verify` → garde du contrat clés de message ↔ séquence.
 4. workflow `sourcing` sur les candidats → approuvés `{lead, variables}`.
 5. `load-lead` par approuvé → lead en review (gardé par `dry_run` ; jamais de launch ici).
-6. `record-run` + `log` → déjà-vus, historique, journal.
+6. `record-run` + `log` → curseur, historique, journal.
 
-Séquence détaillée (flags, assemblage des args du workflow, `dry_run`, `launch`, gestion d'erreur) :
-`references/prospect-routine/run.md`.
+Ce résumé ne suffit pas à exécuter : les flags exacts, l'assemblage des args du workflow, `dry_run`, le
+`launch` gardé et la gestion d'erreur vivent dans `references/prospect-routine/run.md`.
 
-## Créer
+## Créer / Modifier
 
-Une demande de création de campagne est portée par le skill `new-campaign`. S'il ne s'est pas déclenché
-seul, y renvoyer ; ne pas réimplémenter la création ici.
+- **Créer** une campagne → skill `new-campaign` (recherche ICP/angle interactive, fichiers d'intelligence,
+  création Lemlist, smoke test).
+- **Modifier le ciblage** d'une campagne existante (filtres People DB + prompt icpFit) → skill
+  `edit-campaign`. 100% local, validé sur échantillon.
+- **Modifier la séquence, la config / l'état, ou dupliquer** une verticale → pas encore construit. Le dire
+  à l'utilisateur ; ne pas muter la séquence à la main.
 
-## Modifier
+## Références — charge avant d'agir
 
-Affiner le ciblage d'une campagne existante (filtres People DB + prompt icpFit) est porté par le skill
-`edit-campaign` — il se déclenche seul sur « affine le ciblage », « vise plutôt X », « exclus les Y » ;
-sinon l'y renvoyer. 100% local, validé sur échantillon avant tout commit.
+Une commande lancée sans sa référence (ordre, flags, gardes) casse le contrat. **Dans le doute, charge la
+référence : mieux vaut une de trop qu'une de moins.**
 
-Modifier la séquence (étapes, messages, timing), la config ou l'état (pause/reprise, réglages, cadence),
-ou dupliquer une verticale vers un nouveau segment n'est pas encore construit. Le dire à l'utilisateur ;
-ne pas muter la séquence à la main.
+| Intention | Charge avant d'agir |
+|---|---|
+| Run quotidien | `references/prospect-routine/run.md` |
+| Créer une campagne | skill `new-campaign` (+ sa réf `references/new-campaign/vertical-scaffold.md`) |
+| Modifier le ciblage | skill `edit-campaign` |
 
-## Référence
-
-- `references/prospect-routine/run.md` — séquence exacte du run, args du workflow sourcing, dry_run, launch.
+Les skills chargent eux-mêmes leurs propres références ; le routeur n'a qu'à les déclencher.
