@@ -46,8 +46,12 @@ def cmd_fetch(a):
     cfg = config.load_cfg_only(a.config)
     key = config.read_key(cfg["api_key_file"])
     _, camp = lemlist.get_campaign(key, cfg["campaign_id"])
+    st_sch, schedules = lemlist.get_campaign_schedules(key, cfg["campaign_id"])
+    if st_sch != 200 or not isinstance(schedules, list):
+        print(f"avertissement: lecture des schedules KO ({st_sch}) — champ schedules vide", file=sys.stderr)
+        schedules = []
     leads = lemlist.get_campaign_leads(key, cfg["campaign_id"])
-    _emit({"campaign": camp, "leads": leads, "counts": {"leads": len(leads)}})
+    _emit({"campaign": camp, "schedules": schedules, "leads": leads, "counts": {"leads": len(leads)}})
 
 
 def cmd_dedup_check(a):
@@ -156,18 +160,38 @@ def cmd_edit_schedule(a):
     _emit_result_or_stop(st, res)
 
 
+def _noop_or_stop(st, res, idempotent_marker):
+    """Émet le résultat d'une bascule d'état de campagne. Absorbe en no-op le 400 d'idempotence de
+    Lemlist (pauser une campagne déjà arrêtée, reprendre une déjà active) ; tout autre échec applique la
+    règle stop-on-error. Le marqueur est cherché dans le champ `error` du corps (ancré, pour ne pas
+    matcher la sous-chaîne ailleurs ; repli sur le corps brut si non-JSON). Le statut de `get_campaign`
+    ne distingue pas fiablement running d'un brouillon — c'est le 400 qui fait foi."""
+    if st == 400:
+        body = res
+        if isinstance(body, str):
+            try:
+                body = json.loads(body)
+            except ValueError:
+                pass
+        message = body.get("error", "") if isinstance(body, dict) else str(body)
+        if idempotent_marker in str(message).lower():
+            _emit({"status": 200, "result": {"noop": True}})
+            return
+    _emit_result_or_stop(st, res)
+
+
 def cmd_campaign_pause(a):
     cfg = config.load_cfg_only(a.config)
     key = config.read_key(cfg["api_key_file"])
     st, res = lemlist.pause_campaign(key, cfg["campaign_id"])
-    _emit_result_or_stop(st, res)
+    _noop_or_stop(st, res, "not running")
 
 
 def cmd_campaign_resume(a):
     cfg = config.load_cfg_only(a.config)
     key = config.read_key(cfg["api_key_file"])
     st, res = lemlist.start_campaign(key, cfg["campaign_id"])
-    _emit_result_or_stop(st, res)
+    _noop_or_stop(st, res, "already running")
 
 
 def cmd_update_campaign(a):
