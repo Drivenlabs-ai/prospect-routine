@@ -102,6 +102,7 @@ function messagesSchema(sequenceKeys) {
 
 const WRITE_DOCTRINE = [
   "Écris la séquence ENTIÈRE en un seul fil : chaque message prolonge l'angle ouvert par le précédent (tu les reçois tous d'un coup).",
+  "Reste sur l'offre décrite par les prompts d'étape : adapte l'angle au prospect, mais ne propose jamais une capacité ou un service que ces prompts ne décrivent pas, même si le profil du prospect suggère un autre besoin ; sinon tu vends une offre qui n'existe pas.",
   "Règles dures : vouvoiement, français natif, corps ≤ ~75 mots par message, une seule idée par message,",
   "n'ouvre jamais par une question ni par « je », aucun fait inventé, aucun jargon pompeux (leverage, synergies, game-changer…),",
   "pas de formule cliché (« j'espère que vous allez bien », « je me permets », « pour faire suite »), pas d'emoji, ≤ 1 point d'exclamation, pas de tiret cadratin.",
@@ -132,7 +133,7 @@ const REVIEW_SCHEMA = {
         properties: {
           id: { type: "string" },
           no_fabrication: { type: "boolean", description: "Aucun fait/chiffre/résultat inventé." },
-          angle_coherent: { type: "boolean", description: "L'angle tient sur tout le fil, ancré sur le prospect." },
+          angle_coherent: { type: "boolean", description: "L'angle tient sur tout le fil, ancré sur le prospect et sur l'offre décrite (pas un service inventé)." },
           within_length: { type: "boolean", description: "Chaque message ≤ longueur cible." },
           no_banned_phrases: { type: "boolean", description: "Aucune formule cliché / jargon / ouverture interdite." },
           vouvoiement: { type: "boolean", description: "Français, vouvoiement constant." },
@@ -149,7 +150,7 @@ const REVIEW_SCHEMA = {
 const REVIEW_RUBRIC = [
   "Évalue chaque lead sur 5 critères booléens (la garde déterministe is_clean_message couvre déjà markdown/tirets — juge le fond) :",
   "1. no_fabrication — aucun fait, chiffre, résultat ou « cliente de X » non étayé par les faits/contexte fournis.",
-  "2. angle_coherent — un angle unique, spécifique au prospect, qui tient du premier au dernier message.",
+  "2. angle_coherent — un angle unique, spécifique au prospect, ancré sur l'offre décrite par les prompts d'étape (jamais un service inventé), qui tient du premier au dernier message.",
   "3. within_length — chaque message reste dans la longueur cible.",
   "4. no_banned_phrases — pas de jargon (leverage, synergies, game-changer…), pas de flatterie générique, pas d'ouverture par une question ou par « je », pas de « pour faire suite / j'espère que vous allez bien », pas d'ALL CAPS, ≤ 1 « ! ».",
   "5. vouvoiement — français natif, vouvoiement constant.",
