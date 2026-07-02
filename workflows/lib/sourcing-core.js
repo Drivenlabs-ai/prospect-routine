@@ -79,7 +79,7 @@ function messagesSchema(sequenceKeys) {
 const WRITE_DOCTRINE = [
   "Écris la séquence ENTIÈRE en un seul fil : chaque message prolonge l'angle ouvert par le précédent (tu les reçois tous d'un coup).",
   "Reste sur l'offre décrite par les prompts d'étape : adapte l'angle au prospect, mais ne propose jamais une capacité ou un service que ces prompts ne décrivent pas, même si le profil du prospect suggère un autre besoin ; sinon tu vends une offre qui n'existe pas.",
-  "Règles dures : vouvoiement, français natif, corps ≤ ~75 mots par message, une seule idée par message,",
+  "Règles dures : vouvoiement, français natif, une seule idée par message, longueur selon la fiche de chaque étape (aucun plafond imposé ici),",
   "n'ouvre jamais par une question ni par « je », aucun fait inventé, aucun jargon pompeux (leverage, synergies, game-changer…),",
   "pas de formule cliché (« j'espère que vous allez bien », « je me permets », « pour faire suite »), pas d'emoji, ≤ 1 point d'exclamation, pas de tiret cadratin.",
 ].join(" ");
@@ -110,13 +110,12 @@ const REVIEW_SCHEMA = {
           id: { type: "string" },
           no_fabrication: { type: "boolean", description: "Aucun fait/chiffre/résultat inventé." },
           angle_coherent: { type: "boolean", description: "L'angle tient sur tout le fil, ancré sur le prospect et sur l'offre décrite (pas un service inventé)." },
-          within_length: { type: "boolean", description: "Chaque message ≤ longueur cible." },
           no_banned_phrases: { type: "boolean", description: "Aucune formule cliché / jargon / ouverture interdite." },
           vouvoiement: { type: "boolean", description: "Français, vouvoiement constant." },
           pass: { type: "boolean", description: "Vrai UNIQUEMENT si tous les critères ci-dessus sont vrais." },
           notes: { type: "string", description: "Si échec : ce qui cloche, en une phrase." },
         },
-        required: ["id", "no_fabrication", "angle_coherent", "within_length", "no_banned_phrases", "vouvoiement", "pass"],
+        required: ["id", "no_fabrication", "angle_coherent", "no_banned_phrases", "vouvoiement", "pass"],
       },
     },
   },
@@ -124,23 +123,22 @@ const REVIEW_SCHEMA = {
 };
 
 const REVIEW_RUBRIC = [
-  "Évalue chaque lead sur 5 critères booléens (la garde déterministe is_clean_message couvre déjà markdown/tirets — juge le fond) :",
+  "Évalue chaque lead sur 4 critères booléens (la garde déterministe is_clean_message couvre déjà markdown/tirets ; la longueur est pilotée par la fiche d'étape, pas jugée ici — juge le fond) :",
   "1. no_fabrication — aucun fait, chiffre, résultat ou « cliente de X » non étayé par les faits/contexte fournis.",
   "2. angle_coherent — un angle unique, spécifique au prospect, ancré sur l'offre décrite par les prompts d'étape (jamais un service inventé), qui tient du premier au dernier message.",
-  "3. within_length — chaque message reste dans la longueur cible.",
-  "4. no_banned_phrases — pas de jargon (leverage, synergies, game-changer…), pas de flatterie générique, pas d'ouverture par une question ou par « je », pas de « pour faire suite / j'espère que vous allez bien », pas d'ALL CAPS, ≤ 1 « ! ».",
-  "5. vouvoiement — français natif, vouvoiement constant.",
-  "pass = vrai SEULEMENT si les 5 sont vrais.",
+  "3. no_banned_phrases — pas de jargon (leverage, synergies, game-changer…), pas de flatterie générique, pas d'ouverture par une question ou par « je », pas de « pour faire suite / j'espère que vous allez bien », pas d'ALL CAPS, ≤ 1 « ! ».",
+  "4. vouvoiement — français natif, vouvoiement constant.",
+  "pass = vrai SEULEMENT si les 4 sont vrais.",
 ].join("\n");
 
-function buildReviewPrompt({ batch, sequenceKeys, maxWords }) {
+function buildReviewPrompt({ batch, sequenceKeys }) {
   const cards = batch.map((d) => {
     const facts = prospectBlock(d.lead);
     const ctx = d.context && d.context.summary ? `\nContexte : ${d.context.summary}` : "";
     const msgs = sequenceKeys.map((k) => `  [${k}] ${(d.messages && d.messages[k]) || ""}`).join("\n");
     return `--- lead id: ${d.id} ---\n${facts}${ctx}\nMessages :\n${msgs}`;
   }).join("\n\n");
-  return `Tu es juge qualité outbound. Longueur cible : ≤ ${maxWords} mots par message.\n\n${REVIEW_RUBRIC}\n\n## Leads à juger\n${cards}\n\nRends { "verdicts": [ … ] } avec un verdict par lead id ci-dessus.`;
+  return `Tu es juge qualité outbound.\n\n${REVIEW_RUBRIC}\n\n## Leads à juger\n${cards}\n\nRends { "verdicts": [ … ] } avec un verdict par lead id ci-dessus.`;
 }
 
 // ---- pure post-processing ----
@@ -173,9 +171,9 @@ function parseStoreKey(store) {
   return m ? m[1].trim() : null;
 }
 
-// Mirrors the two rules of the engine's delivery.is_clean_message that free prose
-// can realistically trip: em/en dashes and the word cap. Keep these in sync with
-// scripts/prospect_engine/delivery.py if that net changes.
+// Bounds the workflow-managed `contexte` metadata only (em/en dash normalization + a
+// generous word cap so a huge enriched-context blob never blocks a lead at load).
+// Message length is NOT bounded here — it is driven by the step prompt.
 const VARIABLE_MAX_WORDS = 150;
 
 function sanitizeForVariable(text) {
@@ -201,10 +199,10 @@ function buildApproved(draft, storeKey) {
 
 // ---- orchestration (the workflow body; env carries the injected runtime globals) ----
 
-async function batchReview(env, drafts, { sequenceKeys, maxWords, judgeModel, reviewBatchSize }) {
+async function batchReview(env, drafts, { sequenceKeys, judgeModel, reviewBatchSize }) {
   const batches = chunk(drafts, reviewBatchSize);
   const lists = await env.parallel(batches.map((b) => async () =>
-    env.agent(buildReviewPrompt({ batch: b, sequenceKeys, maxWords }),
+    env.agent(buildReviewPrompt({ batch: b, sequenceKeys }),
       { schema: REVIEW_SCHEMA, model: judgeModel, phase: "review", label: `review:${b.length}` })));
   const verdicts = [];
   for (const l of lists) if (l && Array.isArray(l.verdicts)) verdicts.push(...l.verdicts);
@@ -218,13 +216,13 @@ async function reviewAndSplit(env, drafts, opts) {
 async function runSourcing(env) {
   const { agent, pipeline } = env;
   const { candidats = [], prompts = {}, sequence_keys: sequenceKeys = [], enrich = { enabled: false },
-    models = {}, review = {}, review_batch_size: reviewBatchSize = 8 } = env.args || {};
+    models = {}, review_batch_size: reviewBatchSize = 8 } = env.args || {};
   const scoreModel = models.scoring || "haiku";
   const writeModel = models.writing || "sonnet";
   const judgeModel = models.judge || "sonnet";
   const storeKey = parseStoreKey(enrich.store);
   const MSG_SCHEMA = messagesSchema(sequenceKeys);
-  const reviewOpts = { sequenceKeys, maxWords: review.max_words || 75, judgeModel, reviewBatchSize };
+  const reviewOpts = { sequenceKeys, judgeModel, reviewBatchSize };
 
   // Single write call shape, shared by the first pass and the regeneration.
   const writeDraft = async (draft, label, feedback) => {
@@ -267,8 +265,8 @@ async function runSourcing(env) {
 }
 
 module.exports = {
-  interpolate, VERDICT_SCHEMA, PROSPECT_FIELDS, leadId, leadLabel, draftId, buildScorePrompt,
-  ENRICH_SCHEMA, buildEnrichPrompt, messagesSchema, buildWritePrompt,
+  interpolate, VERDICT_SCHEMA, PROSPECT_FIELDS, prospectBlock, leadId, leadLabel, draftId, buildScorePrompt,
+  ENRICH_SCHEMA, buildEnrichPrompt, messagesSchema, WRITE_DOCTRINE, buildWritePrompt,
   REVIEW_SCHEMA, buildReviewPrompt,
   filterDrafts, splitVerdicts, chunk, parseStoreKey, buildApproved,
   batchReview, reviewAndSplit, runSourcing,

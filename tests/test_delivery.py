@@ -23,6 +23,12 @@ def test_is_clean_message_rejects_empty():
     assert not delivery.is_clean_message("   ")
 
 
+def test_is_clean_message_accepts_long_message():
+    # La longueur est pilotée par le prompt d'étape : aucun plafond de mots à la livraison.
+    long_text = "Bonjour, " + "mot " * 200
+    assert delivery.is_clean_message(long_text)
+
+
 def test_contact_payload_splits_name_and_excludes_company():
     p = delivery.contact_payload({"fullName": "Marie Dupont", "linkedinUrl": "https://lk/in/m",
                                   "jobTitle": "Gérante", "companyName": "Agence X"})

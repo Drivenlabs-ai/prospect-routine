@@ -16,7 +16,7 @@ _SKIP_STAGES = {"varset", "launched", "dup"}
 
 def is_clean_message(text):
     """Filet final avant livraison : ni vide, ni tiret cadratin, ni markdown/formule recopiée,
-    ni séparateur, ni doublon manifeste (> 150 mots). Miroir du filtre côté moteur de rédaction."""
+    ni séparateur. La longueur est pilotée par le prompt d'étape — aucun plafond de mots ici."""
     if not text or not text.strip():
         return False
     if "—" in text or "–" in text:
@@ -25,8 +25,6 @@ def is_clean_message(text):
     if any(m in low for m in _MALFORMED_MARKERS):
         return False
     if any(line.strip() == "---" for line in text.splitlines()):
-        return False
-    if len(text.split()) > 150:
         return False
     return True
 

@@ -93,6 +93,11 @@ test("buildWritePrompt omits context and feedback sections when absent", () => {
   assert.doesNotMatch(out, /Correction demandée/);
 });
 
+test("WRITE_DOCTRINE defers message length to the step prompt (no hardcoded cap)", () => {
+  assert.doesNotMatch(core.WRITE_DOCTRINE, /75/);
+  assert.match(core.WRITE_DOCTRINE, /longueur selon la fiche/i);
+});
+
 test("ENRICH_SCHEMA requires summary", () => {
   assert.deepEqual(core.ENRICH_SCHEMA.required, ["summary"]);
 });
@@ -107,25 +112,27 @@ test("buildEnrichPrompt carries the directive and the prospect", () => {
 // review (GATE 2 boolean rubric, by batch)
 // ---------------------------------------------------------------------------
 
-test("REVIEW_SCHEMA declares the boolean rubric per verdict", () => {
+test("REVIEW_SCHEMA declares the boolean rubric per verdict (length is not a gate)", () => {
   const item = core.REVIEW_SCHEMA.properties.verdicts.items;
-  for (const k of ["id", "no_fabrication", "angle_coherent", "within_length", "no_banned_phrases", "vouvoiement", "pass"]) {
+  for (const k of ["id", "no_fabrication", "angle_coherent", "no_banned_phrases", "vouvoiement", "pass"]) {
     assert.ok(item.required.includes(k), `missing ${k}`);
   }
+  assert.ok(!item.required.includes("within_length"), "within_length must not gate");
+  assert.ok(!("within_length" in item.properties), "within_length must be gone from the schema");
 });
 
-test("buildReviewPrompt lists each draft, its messages and the rubric", () => {
+test("buildReviewPrompt lists each draft, its messages and the rubric (no length target)", () => {
   const out = core.buildReviewPrompt({
     batch: [
       { id: "https://lk/a", lead: { fullName: "Marie Roy" }, messages: { icebreaker: "Bonjour..." } },
       { id: "https://lk/b", lead: { fullName: "Jean Sol" }, messages: { icebreaker: "Salut..." } },
     ],
-    sequenceKeys: ["icebreaker"], maxWords: 75,
+    sequenceKeys: ["icebreaker"],
   });
   assert.match(out, /https:\/\/lk\/a/);
   assert.match(out, /https:\/\/lk\/b/);
   assert.match(out, /Marie Roy/);
-  assert.match(out, /75/);
+  assert.doesNotMatch(out, /Longueur cible/);
   assert.match(out, /vouvoiement/i);
   assert.match(out, /pass/i);
 });
