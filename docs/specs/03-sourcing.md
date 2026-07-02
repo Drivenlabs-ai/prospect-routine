@@ -85,8 +85,8 @@ return { approuves: [...approuves, ...regen.passes] }
 - **write** : Sonnet, séquence **complète en un fil** (chaque message reçoit les précédents pour tenir
   l'angle ouvert par l'icebreaker) ; sortie `{messages:{<clé>:texte}}` sur les clés requises (§ spec 2).
 - **review (GATE 2)** : juge Sonnet **par batch**, rubrique booléenne (pas de fait inventé · angle
-  cohérent · ≤ longueur · zéro formule interdite · vouvoiement) → verdict par lead. Rejeté → 1
-  régénération → sinon écarté.
+  cohérent · zéro formule interdite · vouvoiement ; la longueur est pilotée par le prompt d'étape, pas
+  jugée) → verdict par lead. Rejeté → 1 régénération → sinon écarté.
 - Filet déterministe résiduel : `is_clean_message` (moteur) au load, dernier rempart.
 
 ### 3.1 Contrat args/return (interface routeur ↔ workflow) — livré
@@ -103,7 +103,7 @@ args = {
   "models": { "scoring": "haiku", "writing": "sonnet", "judge": "sonnet" },   // défauts montrés
   "enrich": { "enabled": false, "directive": "…", "store": "variable:contexte",
               "model": "sonnet", "agent_type": "general-purpose" },   // enrich = seul agent à outils web
-  "review": { "max_words": 75 }, "review_batch_size": 8                        // optionnels
+  "review_batch_size": 8                                                       // optionnel
 }
 ```
 

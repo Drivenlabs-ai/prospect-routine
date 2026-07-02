@@ -6,7 +6,7 @@ export const meta = {
   "phases": [
     {
       "title": "write",
-      "detail": "1 écriture avant + 1 après par prospect (parité prod), messages bruts côte à côte"
+      "detail": "1 écriture avant + 1 après par prospect (parité prod), côté omis si ses fiches sont vides (mode création), messages bruts côte à côte"
     }
   ]
 };
@@ -74,8 +74,12 @@ async function runCraftCopyTest(env) {
   const promptsAfter = (args && args.prompts_after) || {};
   const model = (args && args.model) || "sonnet";
   const MSG = messagesSchema(sequenceKeys);
+  // A side whose prompts carry no content is skipped entirely (creation mode has no
+  // "before"): writing a sequence from empty step cards would burn one LLM call per
+  // lead for throwaway output.
   const writeOne = (lead, prompts, tag) =>
-    agent(buildWritePrompt({ messagesPrompts: prompts, sequenceKeys, lead, context: null, feedback: null }),
+    !Object.values(prompts).some(Boolean) ? Promise.resolve(null) :
+    agent(buildWritePrompt({ messagesPrompts: prompts, sequenceKeys, lead }),
       { schema: MSG, model, phase: "write", label: `${tag}:${leadLabel(lead)}` })
       .then((out) => (out && out.messages) || null, () => null);
   const comparisons = await pipeline(sample, async (lead, _item, i) => {

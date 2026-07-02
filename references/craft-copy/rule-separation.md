@@ -19,7 +19,7 @@ Spécifique  → propre au rôle d'une étape         Rédacteur → simple cons
 Une fiche de prompt d'étape ne porte **que** sa matière propre. Pour chaque règle candidate, appliquer dans l'ordre :
 
 1. **Universelle** (vraie pour toute campagne — vouvoiement, pas d'emoji, pas de tiret cadratin, pas de markdown, pas d'invention, pas de jargon/cliché, pas d'ouverture par une question ou par « je », une idée par message, ≤ 1 point d'exclamation… ; liste indicative, la doctrine du moteur fait foi) → elle vit dans le **moteur** (doctrine d'écriture + rubrique du juge + garde déterministe). **Ne jamais la recopier dans une fiche.** Manquante et souhaitable → c'est une évolution du moteur, pas un ajout dans une fiche.
-2. **Transverse à la campagne** (le ton, le registre, la voix de marque) → elle vit dans le **fichier voix** de la campagne, déjà injecté avant chaque étape. Ne jamais la répéter dans chaque fiche. Une instruction de ton qui vaut pour tous les messages → signaler que c'est la voix, router vers ce fichier, ne pas la baker dans une étape.
+2. **Transverse à la campagne** (le ton, le registre, la voix de marque) → elle vit dans le **fichier voix** de la campagne, déjà injecté avant chaque étape. Ne jamais la répéter dans chaque fiche. Une instruction de ton qui vaut pour tous les messages → signaler que c'est la voix, router vers ce fichier, ne pas la figer dans une étape.
 3. **Propre au rôle de l'étape** (l'intention du message, l'offre et l'angle, la palette de douleurs, la façon de s'adapter au prospect, la mise en forme visible, les exemples) → elle vit dans la **fiche d'étape**. C'est sa seule matière légitime.
 
 ## Raffinement d'un universel

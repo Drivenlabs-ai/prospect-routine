@@ -7,7 +7,7 @@ const META = {
   name: "craft-copy-test",
   description: "Test avant/après d'un prompt de copy : rejoue l'agent d'écriture réel (parité prod) sur un échantillon, avec l'ancien et le nouveau prompt, et rend les deux jeux de messages côte à côte pour validation humaine. Aucune écriture, aucun gate auto.",
   phases: [
-    { title: "write", detail: "1 écriture avant + 1 après par prospect (parité prod), messages bruts côte à côte" },
+    { title: "write", detail: "1 écriture avant + 1 après par prospect (parité prod), côté omis si ses fiches sont vides (mode création), messages bruts côte à côte" },
   ],
 };
 

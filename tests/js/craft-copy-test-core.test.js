@@ -41,9 +41,21 @@ test("runCraftCopyTest keeps the lead even if a write fails (null side)", async 
   const agent = () => Promise.reject(new Error("dead"));
   const out = await core.runCraftCopyTest({
     agent, pipeline: fakePipeline,
-    args: { sample: [{ linkedinUrl: "https://lk/a" }], sequence_keys: ["icebreaker"], prompts_before: {}, prompts_after: {} },
+    args: { sample: [{ linkedinUrl: "https://lk/a" }], sequence_keys: ["icebreaker"], prompts_before: { icebreaker: "P" }, prompts_after: { icebreaker: "Q" } },
   });
   assert.equal(out.comparisons.length, 1);
   assert.equal(out.comparisons[0].before, null);
   assert.equal(out.comparisons[0].after, null);
+});
+
+test("runCraftCopyTest skips a side whose prompts are all empty (creation mode, no wasted calls)", async () => {
+  const calls = [];
+  const agent = (prompt, opts) => { calls.push(opts.label); return Promise.resolve({ messages: { icebreaker: "X" } }); };
+  const out = await core.runCraftCopyTest({
+    agent, pipeline: fakePipeline,
+    args: { sample: [{ linkedinUrl: "https://lk/a" }], sequence_keys: ["icebreaker"], prompts_before: {}, prompts_after: { icebreaker: "NOUVEAU" } },
+  });
+  assert.equal(out.comparisons[0].before, null);
+  assert.equal(out.comparisons[0].after.icebreaker, "X");
+  assert.ok(calls.length === 1 && calls[0].startsWith("after"), "only the after side may call the agent");
 });

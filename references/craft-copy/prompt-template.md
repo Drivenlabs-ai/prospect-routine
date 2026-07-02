@@ -24,8 +24,9 @@ qui est décrit ici.</offre>
 <adaptation>Comment coller à ce prospect (taille, zone, spécialité) à partir de ses signaux, sans inventer
 aucun fait.</adaptation>
 
-<mise_en_forme>La forme visible du message : blocs courts séparés par une ligne vide, salutation seule sur
-sa ligne, appel final seul sur sa ligne. Pas de pavé d'un bloc.</mise_en_forme>
+<mise_en_forme>La forme visible du message, dont la longueur visée — la fiche est le seul endroit qui la
+fixe, le moteur n'impose aucun plafond. Blocs courts séparés par une ligne vide, salutation seule sur sa
+ligne, appel final seul sur sa ligne. Pas de pavé d'un bloc.</mise_en_forme>
 
 <exemples>
 <exemple>Un message complet, exactement au format voulu, sur un angle donné.</exemple>
@@ -44,7 +45,7 @@ préambule, commentaire ni répétition.</sortie>
 
 ## Ce qui est délibérément absent, et pourquoi
 
-- **Pas de liste d'interdits qui redit la doctrine** (vouvoiement, pas d'emoji, pas de tiret, pas de jargon, longueur…) : le moteur les porte déjà (voir `rule-separation.md`). Les redire dans la fiche crée un doublon qui divergera.
+- **Pas de liste d'interdits qui redit la doctrine** (vouvoiement, pas d'emoji, pas de tiret, pas de jargon…) : le moteur les porte déjà (voir `rule-separation.md`). Les redire dans la fiche crée un doublon qui divergera.
 - **Pas de critères de succès** : ce sont ceux du juge du moteur. Les mettre dans la fiche pousse l'agent à s'auto-noter au lieu d'écrire.
 - **Pas d'étapes de raisonnement** : la copy est une tâche créative ; un raisonnement pas-à-pas fuit dans la sortie et sur-contraint. Énoncer l'intention et les contraintes, pas la procédure.
 

@@ -45,15 +45,22 @@ Code/drivenlabs-ai/outreach/                        # plugin (repo git, source d
 ├── .claude-plugin/plugin.json                      # manifeste
 ├── skills/driven-outreach/SKILL.md                 # ROUTER (mince, trigger langage naturel)
 ├── skills/new-campaign/SKILL.md                    # W1 — créer une campagne (skill piloté par Claude)
+├── skills/edit-campaign/SKILL.md                   # SP-A/B/C — modifier ciblage / séquence / config
+├── skills/craft-copy/SKILL.md                      # craft des prompts de copy (dialogue → fiche XML → test avant/après)
 ├── scripts/
 │   ├── routine.py                                  # moteur — sous-commandes atomiques (cf. §5)
 │   └── sync-workflows.sh                            # copie workflows → ~/.claude/workflows/
 ├── workflows/                                       # source versionnée des workflows (fan-out d'agents)
 │   ├── sourcing.workflow.js                        # W3 — GÉNÉRÉ depuis lib/sourcing-core.js
 │   ├── icp-check.workflow.js                       # alignement icpFit au setup — GÉNÉRÉ depuis lib/icp-check-core.js
-│   └── lib/                                         # logique déterministe testée + générateur
+│   ├── craft-copy-test.workflow.js                 # test avant/après d'un prompt de copy — GÉNÉRÉ depuis lib/craft-copy-test-core.js
+│   └── lib/                                         # logique déterministe testée + générateurs
 │       ├── sourcing-core.js                        # helpers purs + runSourcing (node --test)
-│       └── build-workflow.js                       # génère le .workflow.js self-contained
+│       ├── icp-check-core.js                       # scoring icpFit (copie prod verrouillée par test)
+│       ├── craft-copy-test-core.js                 # écriture avant/après (copie prod verrouillée par test)
+│       ├── build-workflow.js                       # génère sourcing.workflow.js
+│       ├── build-icp-check-workflow.js             # génère icp-check.workflow.js
+│       └── build-craft-copy-test-workflow.js       # génère craft-copy-test.workflow.js
 │   # (W2 lemlist-setup = procédure déterministe du routeur, pas un .workflow.js — cf. spec 02)
 ├── agents/                                          # sourcing / scoring / juge (à venir)
 ├── hooks/hooks.json                                # SessionStart → sync-workflows.sh

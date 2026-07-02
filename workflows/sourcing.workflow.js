@@ -212,7 +212,8 @@ function contextValue(context) {
 
 // Policy: message variables are passed through verbatim — the writer owns them
 // (doctrine + review gate), and silently truncating outbound copy would be worse
-// than the engine's load-net rejecting it. Only the workflow-managed metadata
+// than the engine's load-net rejecting a broken one (dash/markdown/separator —
+// length is prompt-driven, unbounded). Only the workflow-managed metadata
 // (`contexte`) is sanitized, so it never blocks an otherwise-good lead at load.
 function buildApproved(draft, storeKey) {
   const variables = { ...draft.messages };

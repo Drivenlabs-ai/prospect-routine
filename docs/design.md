@@ -261,7 +261,7 @@ Le comportement Lemlist sur l'insertion de step / changement de délai **avec de
 
 - **Holdout set** jamais vu à l'itération → le gate ≥ 95 % s'évalue dessus (le dataset de dev sert au debug). Tue l'overfit / le gaming (retrait des cas durs).
 - **Labels signés humain** : le juge Sonnet pré-labellise en draft, mais la vérité-terrain est validée à la main (≥ échantillon de contrôle) → casse la circularité « le juge labellise ET juge ».
-- **Rubrique booléenne** pour GATE 2 (pas de fait inventé / angle cohérent / ≤ 75 mots / zéro formule interdite / vouvoiement) → verdict reproductible ; multi-vote sur cas limites.
+- **Rubrique booléenne** pour GATE 2 (pas de fait inventé / angle cohérent / zéro formule interdite / vouvoiement — la longueur est pilotée par le prompt d'étape, pas jugée) → verdict reproductible ; multi-vote sur cas limites.
 - **Taille min de dataset** (≥ 30, ≥ 10/classe) + intervalle de confiance affiché ; vivier insuffisant → élargir avant de gater.
 - **Re-gate périodique + pin du model ID Haiku** (le gate one-shot périme à chaque nouvelle version du modèle de prod).
 

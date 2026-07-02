@@ -5,6 +5,10 @@ séquence live, on la mute par API, aucune représentation locale. Commandes mot
 `uv run python scripts/routine.py <cmd>`. Les schémas exacts des bodies (par type d'étape, par champ de
 schedule) se lisent sur la doc live via `/lemlist` — ne pas les deviner.
 
+Frontière : ici s'éditent la structure et les champs statiques d'une étape (objet, texte cadre, délai,
+canal). La copy générée par l'IA — le texte que le prospect lit, porté par un `{{var}}` et son prompt
+d'étape — se travaille via le skill `craft-copy`, jamais en réécrivant le champ `message`.
+
 ## Flux (l'ordre est la garde : valider avant d'écrire)
 
 1. **resolve** la campagne → `campaign_id` + `config_path`.
@@ -18,8 +22,9 @@ schedule) se lisent sur la doc live via `/lemlist` — ne pas les deviner.
    (a) les changements de séquence ; (b) les prompts locaux à créer / ajuster / signaler-orphelin.
    Avertir si des leads sont déjà en cours de séquence (effet non documenté).
 6. **appliquer** (le body de chaque mutation est écrit dans un fichier, lu via `--input`) :
-   - contenu / objet / délai → `update-step --config <config_path> --sequence-id <id> --step-id <id>
-     --input <chemin>` (le body inclut toujours `type`, requis — sinon l'API rejette en 400).
+   - champs statiques (objet / texte cadre / délai) → `update-step --config <config_path> --sequence-id
+     <id> --step-id <id> --input <chemin>` (le body inclut toujours `type`, requis — sinon l'API rejette
+     en 400).
    - ajout → `add-step --config <config_path> --sequence-id <id> --input <chemin>` (body avec `type` +
      champs requis selon le type ; position via `index`).
    - retrait → `delete-step --config <config_path> --sequence-id <id> --step-id <id>`.
@@ -31,8 +36,8 @@ schedule) se lisent sur la doc live via `/lemlist` — ne pas les deviner.
    - canal → `type` immuable : `delete-step` puis `add-step` (recreate), en re-posant `index`, `delay`,
      contenu. Le signaler explicitement dans le preview.
 7. **synchroniser les prompts locaux** (premier rang) : pour chaque `{{var}}` custom du nouveau jeu, créer
-   `prompts/<var>.md` si l'étape est nouvelle, ajuster si l'étape éditée change l'angle (craft `/lemlist`) ;
-   une étape retirée peut laisser un prompt orphelin → le signaler.
+   un stub `prompts/<var>.md` de couverture si l'étape est nouvelle, puis passer la main à `craft-copy`
+   pour le craft de sa copy ; une étape retirée peut laisser un prompt orphelin → le signaler.
 8. **verify** : `verify --config <config_path>` → `aligned` (zéro `missing_prompts`). Sinon créer / ajuster
    le prompt manquant et re-verify.
 9. **confirmer** : nouvelle séquence + couverture du contrat de variables OK.

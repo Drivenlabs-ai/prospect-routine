@@ -68,9 +68,11 @@ la phase 1, rédige :
 - `icp.md` · `persona.md` · `pain-points.md` · `value-proposition.md` · `triggers.md`
 - `prompts/icpFit.md` (qualification) — écrit ici. Les prompts de **copy** (un `prompts/<step>.md` par
   message : `icebreaker` / `followup` / `closing` du template par défaut) s'écrivent en déléguant à
-  `craft-copy`, en mode express : l'angle est déjà verrouillé en phase 1, donc peu d'allers-retours, et
-  l'utilisateur voit la copy candidate avant qu'elle soit gardée. Les noms de fichiers = clés de variables
-  de la séquence (cf. Référence, contrat de variables) ; `verify` (§3) réconcilie avec la séquence réelle.
+  `craft-copy`, en mode création : l'angle est déjà verrouillé en phase 1, donc dialogue abrégé, et
+  l'utilisateur voit la copy candidate avant qu'elle soit gardée. La campagne n'étant pas encore
+  enregistrée, fournis à `craft-copy` le chemin du `campaign.json` draft et les clés du template par
+  défaut — il saute sa résolution par le registre. Les noms de fichiers = clés de variables de la
+  séquence (cf. Référence, contrat de variables) ; `verify` (§3) réconcilie avec la séquence réelle.
 - `campaign.json` draft (forme en Référence ; `dry_run: true`, ids `null`).
 
 Garde : ne pas écraser un fichier d'intelligence existant sans confirmation. (Le hook `PostToolUse` lance

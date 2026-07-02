@@ -12,7 +12,7 @@ L'utilisateur juge mieux sur des messages que sur des abstractions. Le geste :
 
 En améliorant une fiche existante, amorcer le dialogue sur la **copy réelle qu'elle produit aujourd'hui** (générée via le test, voir `test-loop.md`) : on discute d'un message réel, pas d'une idée.
 
-Sortie du dialogue : une **shortlist validée** — environ 3 exemples que l'utilisateur endosse. Ces 3 exemples deviennent les few-shots de la section `<exemples>` de la fiche. Les contre-exemples restent dans le dialogue : ils ont révélé la frontière du goût, leur leçon s'écrit en contrainte dans la fiche, ils ne sont jamais recopiés dedans.
+Sortie du dialogue : une **présélection validée** — environ 3 exemples que l'utilisateur endosse. Ces 3 exemples deviennent les few-shots de la section `<exemples>` de la fiche. Les contre-exemples restent dans le dialogue : ils ont révélé la frontière du goût, leur leçon s'écrit en contrainte dans la fiche, ils ne sont jamais recopiés dedans.
 
 ## La structure d'un message, par rôle d'étape
 
